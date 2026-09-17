@@ -1,0 +1,42 @@
+# Everything setup.sh builds
+.venv/
+/models/
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Rendered audio -- regenerate it; back it up separately.
+# Canary reference audio is committed on purpose (see songs/_canary), so an
+# environment failure can be diagnosed and not merely detected.
+*.flac
+!songs/_canary/reference/*.flac
+*.mp3
+*.wav
+*.aiff
+*.aif
+*.m4a
+*.ogg
+*.opus
+
+# Model weights / large binaries
+*.safetensors
+*.ckpt
+*.pt
+*.pth
+*.bin
+*.onnx
+
+# Generated artifacts. semantic.npy / latent.npy are the exception and are
+# whitelisted per song, because they are how a take travels between machines.
+*.npy
+!songs/*/tokens/*.npy
+
+# Local scratch
+/out/
+/runs/
+*.log
+*.bak
+*.partial
+.DS_Store
+.idea/
+.vscode/

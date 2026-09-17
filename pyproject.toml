@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "audiogen"
+version = "0.1.0"
+description = "Wrapper over a pinned YuE2 inference fork: conventions, continuation chains and provenance"
+requires-python = ">=3.12"
+# Deliberately unversioned here. The exact commit is pinned in env/pins.env and
+# installed by setup.sh; duplicating a version range would be a second source of
+# truth for one dependency.
+dependencies = ["yue2-infer"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
