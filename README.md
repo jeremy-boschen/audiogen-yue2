@@ -51,6 +51,85 @@ rebase cost forever, so the line is kept deliberately.
 Never use it for a take you intend to keep -- the pin is what makes a run
 reproducible.
 
+## Rendering a song
+
+A song is a directory; `song.json` is its contract.
+
+```sh
+bin/render.py burn_it_down              # every step, in order
+bin/render.py burn_it_down --step grown # one step, plus the chain it carries from
+bin/render.py burn_it_down --dry-run    # resolve and check the manifest, load no weights
+bin/render.py burn_it_down --out ~/dev/projects/audiogen/takes
+```
+
+Audio never lands in this repo. The repo holds what *defines* a song -- score,
+lyrics, style, manifest; the studio holds what it renders to.
+
+### Steps and carrying
+
+```json
+{
+  "id": "burn_it_down",
+  "seed": 777,
+  "cot": "full",
+  "generation_config": {"rng_device": "cpu"},
+  "semantic_sampling": {"temperature": 1.0, "penalty_window": 50, "min_tokens": 200},
+  "steps": [
+    {"id": "riff",  "seconds": 45.0},
+    {"id": "grown", "seconds": 201.2, "carry_from": "riff",  "carry_seconds": 45.0},
+    {"id": "tail",  "seconds": 201.1, "carry_from": "grown", "carry_seconds": 180.0, "seed": 779}
+  ]
+}
+```
+
+`seconds` is the length the take should **end up**. `carry_seconds` is how much of
+the earlier take is kept, measured from its start, and is always explicit -- a
+sentinel meaning "all of it" reads fine until the source length changes underneath
+it. The runner converts to the engine's `max_tokens`, which counts **new** tokens
+rather than the total, so a manifest states the thing a person actually means.
+
+### Engine units
+
+Seconds are a convenience, and a convenience that cannot be bypassed is a cage.
+Every derived value has an escape hatch naming the engine's own unit, and the
+hatch wins outright:
+
+| convenience | engine unit |
+|---|---|
+| `"seconds": 200.0` | `"max_tokens": 3875` |
+| `"carry_seconds": 45.0` | `"carry_tokens": 1125` |
+
+Both spellings of the same chain resolve to the same plan, and a step may give
+both -- a manifest is allowed to spell out what it means. But they must agree: a
+mismatch is an **error naming both values**, never a silent precedence rule, since
+a precedence rule is only ever discovered once the two have already drifted.
+
+```
+step 'b' disagrees with itself: seconds=200.0 less 1125 carried is 3875 new
+tokens, but max_tokens=5000 was given
+```
+
+Unknown manifest keys are rejected too, so a typo cannot silently leave a default
+in place.
+
+Everything the engine already names well -- `chunk_seconds`, `overlap_seconds`,
+`blend_seconds`, `penalty_window`, `min_tokens`, `rng_device`, the whole
+`generation_config` -- passes through under its own name. The wrapper abstracts
+gotchas, not the engine.
+
+A carrying step hands the earlier take's semantic tokens to generation *and* its
+latents to synthesis, then asserts the carried tokens came back verbatim. If the
+continuation silently failed to take, the render stops rather than quietly
+producing a fresh song at the right length.
+
+`--dry-run` validates the whole manifest -- carry order, carry length, leftover
+budget -- before a single weight loads. A bad manifest fails in milliseconds, not
+twelve minutes in.
+
+Each run writes `provenance.json` next to the takes: resolved torch and
+`yue2-infer` versions, device, seeds, sampling, hashes of style and lyrics, and
+every stage hash per take.
+
 ## The canary
 
 `bin/canary.py` renders `songs/_canary` and hashes **every stage boundary**, not
