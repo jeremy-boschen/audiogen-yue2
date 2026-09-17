@@ -1,0 +1,50 @@
+{
+  "_comment": "Recorded by bin/canary.py --record. Per-stage hashes of the fixture render. A change here is a change in engine behaviour.",
+  "recorded": "2026-09-17",
+  "stages": {
+    "abc": {
+      "hash": "4a00ec75042607bd",
+      "tokens": 2440,
+      "prefix_tokens": 2719
+    },
+    "semantic": {
+      "hash": "528f667f571d8af9",
+      "tokens": 5000,
+      "seconds": 200.0
+    },
+    "latent": {
+      "hash": "6a31dc00031a2c77",
+      "shape": [
+        5000,
+        64
+      ]
+    },
+    "pcm": {
+      "hash": "bb5d39561a0eb146",
+      "shape": [
+        9599936,
+        2
+      ]
+    }
+  },
+  "exercises": {
+    "min_tokens_200": {
+      "crossed": true,
+      "note": "EOS suppressed below this (sampling.py)"
+    },
+    "penalty_window_50": {
+      "crossed": true,
+      "note": "repetition window slides past full"
+    },
+    "nar_query_block_256": {
+      "crossed": true,
+      "note": "NAR attention blocks at 256 on MPS/CPU (nar.py)"
+    },
+    "nar_multichunk": {
+      "crossed": false,
+      "frames_needed": 10927,
+      "note": "natural NAR split; needs ~437s at this prefix"
+    }
+  },
+  "render_seconds": 869.9
+}

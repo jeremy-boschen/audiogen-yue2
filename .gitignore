@@ -26,10 +26,12 @@ __pycache__/
 *.bin
 *.onnx
 
-# Generated artifacts. semantic.npy / latent.npy are the exception and are
-# whitelisted per song, because they are how a take travels between machines.
+# Generated artifacts. A fixture's reference arrays are the exception: semantic.npy
+# and latent.npy are how a take travels between machines, and they are small.
+# Rendered audio is NOT committed -- the per-stage hashes localise a regression
+# better than a waveform can, and semantic.npy re-derives the audio exactly.
 *.npy
-!songs/*/tokens/*.npy
+!songs/*/reference/*.npy
 
 # Local scratch
 /out/

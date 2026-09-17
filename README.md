@@ -51,6 +51,52 @@ rebase cost forever, so the line is kept deliberately.
 Never use it for a take you intend to keep -- the pin is what makes a run
 reproducible.
 
+## The canary
+
+`bin/canary.py` renders `songs/_canary` and hashes **every stage boundary**, not
+just the audio:
+
+```sh
+bin/canary.py            # verify against songs/_canary/expected.json
+bin/canary.py --record   # rewrite it, only when a change is intended
+```
+
+Per stage, because the acoustic stage attends over the whole sequence: a semantic
+token that first differs at 200s still changes latent frame 0. An end-to-end audio
+hash can only say "different"; the stage hashes say *where*, and everything
+downstream of the first disagreement differs as a consequence rather than
+independently.
+
+Run it after any rebase onto upstream, any new fork commit, and any change to the
+lockfile. It is also the instrument for a cross-machine comparison -- run it on two
+boxes and the first stage that disagrees is the answer.
+
+### Why this length
+
+The fixture is deliberately long enough to cross this stack's length-dependent
+branches. These were read out of the library, not assumed:
+
+| branch | threshold | at 25 tok/s | where |
+|---|---|---|---|
+| EOS suppressed below `min_tokens` | 200 tokens | 8.0s | `sampling.py` |
+| repetition `penalty_window` slides | 50 tokens | 2.0s | `sampling.py` |
+| NAR attention query-blocks (MPS/CPU; CUDA does the full sequence) | 256 frames | 10.2s | `nar.py` |
+| NAR splits into multiple chunks | `(24576 - prefix - 3) // 2` | ~475s | `protocol.py` |
+
+`expected.json` records which of these the recorded take actually crossed, so the
+coverage is a measurement rather than a claim. The last one needs an eight-minute
+render and is **not** crossed; the same stitching path is reachable cheaply by
+forcing `chunk_frames`.
+
+The precedent: the ComfyUI canary was nearly useless at 25s because it sat under a
+1024-token kernel threshold and **passed under the wrong launch flags**. That
+specific gate belonged to a node pack not used here, but the lesson generalises --
+a probe shorter than the behaviour it is meant to detect proves nothing.
+
+Rendered audio is not committed. The stage hashes localise a regression better than
+a waveform, and `reference/semantic.npy` re-derives the audio exactly;
+`--record` writes the FLAC to `out/`, which is gitignored.
+
 ## What is and is not reproducible
 
 Pinned and verified: the environment, and a take regenerated inside it.

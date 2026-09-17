@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Build the yue2 environment from a clean clone. macOS / Apple Silicon.
 #
-#   ./setup.sh [--venv PATH] [--dev] [--skip-models]
+#   ./setup.sh [--venv PATH] [--dev] [--models PATH] [--skip-models]
 #
 # Creates .venv/ (gitignored) from a hash-verified lockfile, then installs our
 # fork of the official inference library at the commit pinned in env/pins.env.
@@ -17,10 +17,12 @@ source "$HERE/env/pins.env"
 VENV="$HERE/.venv"
 DEV=0
 SKIP_MODELS=0
+MODELS_SRC=""   # reuse an existing weights dir instead of downloading 7.3 GB again
 while [ $# -gt 0 ]; do
   case "$1" in
     --venv)         VENV="$2"; shift 2 ;;
     --dev)          DEV=1; shift ;;
+    --models)       MODELS_SRC="$2"; shift 2 ;;
     --skip-models)  SKIP_MODELS=1; shift ;;
     -h|--help)      sed -n '2,12p' "$0"; exit 0 ;;
     *)              echo "unknown argument: $1" >&2; exit 2 ;;
@@ -55,7 +57,19 @@ say "Installing this package"
 VIRTUAL_ENV="$VENV" uv pip install -q --no-deps -e "$HERE"
 
 # ---------- weights ----------
-if [ "$SKIP_MODELS" = 0 ]; then
+if [ -n "$MODELS_SRC" ]; then
+  say "Linking weights from $MODELS_SRC"
+  SRC="$(cd "$MODELS_SRC" && pwd)"
+  for name in YuE2-3B YuE2-Vae; do
+    [ -d "$SRC/$name" ] || { echo "missing $SRC/$name" >&2; exit 1; }
+  done
+  mkdir -p "$HERE/models"
+  for name in YuE2-3B YuE2-Vae; do
+    rm -rf "$HERE/models/$name"
+    ln -s "$SRC/$name" "$HERE/models/$name"
+    echo "    $name -> $SRC/$name"
+  done
+elif [ "$SKIP_MODELS" = 0 ]; then
   say "Fetching weights at pinned revisions"
   MODELS="$HERE/models"
   mkdir -p "$MODELS"
