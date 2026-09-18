@@ -7,6 +7,9 @@ its latents to synthesis. So the stages are walked here instead, and every
 boundary is hashed on the way past.
 """
 import json
+import os
+import re
+import sys
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -95,9 +98,22 @@ def carried_note(step: Step) -> dict | None:
     return None if step.carry_from is None else {"from": step.carry_from, "tokens": step.carry_tokens}
 
 
+def request_id(song: Song, step: Step) -> str:
+    """Name the take after what shaped it, adapters included.
+
+    The engine only checks that this is filename-safe -- it never reaches the
+    prompt or the token stream, so an arm tag cannot confound a comparison. It
+    does reach the listening page, which titles each case by it, and two arms of
+    an A/B that print the same title are not a comparison anyone can read.
+    """
+    tag = ".".join(f"{a.path.stem}-x{a.strength:g}" for a in lora.from_manifest(song.lora))
+    name = f"{song.id}.{step.id}" + (f".{tag}" if tag else "")
+    return re.sub(r"[^A-Za-z0-9_.-]", "-", name)[:180]
+
+
 def request_for(song: Song, step: Step):
     from yue2.protocol import SongRequest
-    return SongRequest(style=song.style, lyrics=song.lyrics, id=f"{song.id}.{step.id}",
+    return SongRequest(style=song.style, lyrics=song.lyrics, id=request_id(song, step),
                        seed=step.seed, cot=song.cot, abc=song.abc, cfg_scale=song.cfg_scale)
 
 
@@ -159,6 +175,44 @@ def render_step(pipe, song: Song, step: Step, previous: Take | None = None) -> T
                 plan_prefix_tokens=len(plan.prefix), carried=carried, result=result)
 
 
+# Variables that can change what gets rendered: threading, backend selection,
+# device visibility, and which weights HF_HOME/HF_HUB_OFFLINE resolve to.
+ENV_PREFIXES = ("PYTORCH", "TORCH", "MPS", "OMP", "MKL", "CUDA", "HF_")
+SECRETISH = ("TOKEN", "KEY", "SECRET", "PASSWORD", "AUTH", "CREDENTIAL")
+
+
+def recorded_env() -> dict:
+    """The environment that shapes a render, with credentials named but not copied.
+
+    HF_TOKEN sits squarely inside the HF_ prefix and is a live credential. A
+    provenance file is copied into every output directory and travels with the
+    audio, so the value must never land in one; that it was set is the part that
+    matters for reproducing a run.
+    """
+    out = {}
+    for key in sorted(os.environ):
+        if not key.startswith(ENV_PREFIXES):
+            continue
+        out[key] = "<set, not recorded>" if any(w in key.upper() for w in SECRETISH) else os.environ[key]
+    return out
+
+
+def wrapper_commit() -> str:
+    """Which revision of this package rendered the take.
+
+    provenance already pins the engine and torch. It said nothing about the code
+    doing the pinning, which is the part most likely to have moved.
+    """
+    import subprocess
+    try:
+        here = Path(__file__).resolve().parent
+        show = subprocess.run(["git", "-C", str(here), "describe", "--always", "--dirty"],
+                              capture_output=True, text=True, timeout=5)
+        return show.stdout.strip() if show.returncode == 0 else "unknown"
+    except (OSError, subprocess.SubprocessError):
+        return "unknown"
+
+
 def provenance(song: Song, takes: list[Take], models: Path) -> dict:
     """What a run needs to be reproducible later, resolved rather than referenced."""
     import torch
@@ -168,11 +222,24 @@ def provenance(song: Song, takes: list[Take], models: Path) -> dict:
         "song": song.id,
         "rendered": time.strftime("%Y-%m-%dT%H:%M:%S"),
         "environment": {
+            "audiogen": wrapper_commit(),
             "yue2_infer": version("yue2-infer"),
             "torch": torch.__version__,
+            "python": sys.version.split()[0],
             "device": "cuda" if torch.cuda.is_available()
                       else "mps" if torch.backends.mps.is_available() else "cpu",
             "models": str(models),
+        },
+        # The command line is part of the environment. ComfyUI taught us this the
+        # expensive way: its launch flags changed the audio from the first token,
+        # appeared in no freeze file, no lockfile and no embedded workflow, and
+        # survived only in a shell transcript. Anything that decides what gets
+        # rendered and is not already above belongs here.
+        "invocation": {
+            "argv": list(sys.argv),
+            "executable": sys.executable,
+            "cwd": str(Path.cwd()),
+            "env": recorded_env(),
         },
         "lora": [adapter.identity() for adapter in lora.from_manifest(song.lora)] or None,
         "request": {

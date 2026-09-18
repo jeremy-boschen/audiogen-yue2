@@ -73,3 +73,61 @@ def test_listen_page_accepts_two_takes(tmp_path):
     assert [c["status"] for c in manifest["cases"]] == ["complete", "complete"]
     # Each case's audio passed the native hash check, not merely got copied.
     assert all(c["native_artifact_checks"]["audio.flac"] == "passed" for c in manifest["cases"])
+
+
+class TestProvenanceRecordsTheInvocation:
+    """The ComfyUI launch flags changed the audio and lived only in a transcript.
+
+    Anything that decides what gets rendered has to land in the record, not in
+    the shell history of whoever happened to run it.
+    """
+
+    def a_song(self, tmp_path):
+        import json as _json
+        from audiogen import song as song_module
+        (tmp_path / "style.txt").write_text("rock, female vocal")
+        (tmp_path / "lyrics.txt").write_text("[verse]\nsome words")
+        (tmp_path / "song.json").write_text(_json.dumps(
+            {"id": "s", "seed": 1, "steps": [{"id": "a", "seconds": 10.0}]}))
+        return song_module.load(tmp_path)
+
+    def test_the_command_line_is_recorded(self, tmp_path, monkeypatch):
+        from audiogen import render
+        monkeypatch.setattr(sys, "argv", ["bin/render.py", "burn_it_down", "--lora", "x.safetensors:nar"])
+        record = render.provenance(self.a_song(tmp_path), [], tmp_path)
+        assert record["invocation"]["argv"][-1] == "x.safetensors:nar"
+        assert record["invocation"]["executable"] == sys.executable
+
+    def test_the_interpreter_is_recorded_not_just_torch(self, tmp_path):
+        from audiogen import render
+        record = render.provenance(self.a_song(tmp_path), [], tmp_path)
+        assert record["environment"]["python"] == ".".join(str(n) for n in sys.version_info[:3])
+        assert record["environment"]["torch"]
+
+    def test_numeric_env_vars_are_captured_and_others_left_alone(self, tmp_path, monkeypatch):
+        from audiogen import render
+        monkeypatch.setenv("PYTORCH_ENABLE_MPS_FALLBACK", "1")
+        monkeypatch.setenv("SOME_UNRELATED_SECRETISH_VAR", "nope")
+        env = render.provenance(self.a_song(tmp_path), [], tmp_path)["invocation"]["env"]
+        assert env["PYTORCH_ENABLE_MPS_FALLBACK"] == "1"
+        assert "SOME_UNRELATED_SECRETISH_VAR" not in env
+
+
+class TestProvenanceNeverCopiesACredential:
+    """provenance.json travels with the audio into every output directory."""
+
+    def test_a_token_is_named_but_not_copied(self, monkeypatch):
+        from audiogen import render
+        monkeypatch.setenv("HF_TOKEN", "hf_" + "a" * 34)
+        monkeypatch.setenv("HF_HOME", "/tmp/hf")
+        env = render.recorded_env()
+        assert env["HF_TOKEN"] == "<set, not recorded>"
+        assert "a" * 34 not in json.dumps(env)
+        assert env["HF_HOME"] == "/tmp/hf", "non-secret settings still recorded"
+
+    def test_every_secretish_spelling_is_covered(self, monkeypatch):
+        from audiogen import render
+        for name in ("HF_TOKEN", "CUDA_API_KEY", "TORCH_AUTH", "MKL_SECRET_X"):
+            monkeypatch.setenv(name, "sensitive-value")
+        env = render.recorded_env()
+        assert "sensitive-value" not in json.dumps(env)
