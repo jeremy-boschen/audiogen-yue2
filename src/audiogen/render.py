@@ -17,7 +17,7 @@ from pathlib import Path
 import numpy as np
 
 from . import hashes, lora
-from .song import Song, Step, seconds_to_tokens
+from .song import PIPELINE_KEYS, Song, Step, seconds_to_tokens
 
 SAMPLE_RATE = 48000
 
@@ -58,8 +58,15 @@ def build_pipeline(models: Path, song: Song, *, progress: bool = True):
     from yue2.protocol import GenerationConfig
 
     config = GenerationConfig(**song.generation_config)
+    # The ComfyUI album ran behind three launch flags that changed the audio and
+    # were written down nowhere. The engine's equivalents are constructor
+    # arguments, so they belong in the manifest where they are read back with
+    # the take rather than typed at a shell.
+    unknown = set(song.pipeline) - PIPELINE_KEYS
+    if unknown:
+        raise ValueError(f"unknown pipeline keys {sorted(unknown)}; known: {sorted(PIPELINE_KEYS)}")
     pipe = YuE2Pipeline(Path(models) / "YuE2-3B", Path(models) / "YuE2-Vae",
-                        generation_config=config, progress=progress)
+                        generation_config=config, progress=progress, **song.pipeline)
     adapters = lora.from_manifest(song.lora)
     if adapters:
         # Attached through the engine's hook rather than by patching pipe._model:
@@ -241,6 +248,7 @@ def provenance(song: Song, takes: list[Take], models: Path) -> dict:
             "cwd": str(Path.cwd()),
             "env": recorded_env(),
         },
+        "pipeline": song.pipeline or None,
         "lora": [adapter.identity() for adapter in lora.from_manifest(song.lora)] or None,
         "request": {
             "seed": song.seed, "cot": song.cot, "cfg_scale": song.cfg_scale,

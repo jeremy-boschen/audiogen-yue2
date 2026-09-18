@@ -11,6 +11,7 @@ the studio holds what it renders to.
 """
 import argparse
 import json
+import os
 import pathlib
 import sys
 
@@ -47,6 +48,26 @@ def describe(song, steps):
               f"{carried:>8.1f}s {step.new_tokens:>9}  {step.carry_from or '-'}")
 
 
+def comfyui_parity(args) -> dict:
+    """Map ComfyUI's launch flags onto the engine's constructor arguments.
+
+    --listen has no counterpart and is ignored; the rest are recorded in argv
+    either way, so a take can be checked against the command that made it.
+    """
+    out = {}
+    if args.use_pytorch_cross_attention:
+        out["backend"] = "torch"
+    if args.disable_smart_memory:
+        out["offload_ar"] = True
+    if args.reserve_vram is not None:
+        total = os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES") / 2**30
+        budget = total - args.reserve_vram
+        if budget <= 0:
+            raise SystemExit(f"--reserve-vram {args.reserve_vram} leaves nothing of {total:.0f} GiB")
+        out["memory_budget_gib"] = budget
+    return out
+
+
 def parse_lora(spec: str):
     """PATH, PATH:BRANCH or PATH:BRANCH:STRENGTH -- a colon-joined form of the manifest entry."""
     path, _, rest = spec.partition(":")
@@ -64,6 +85,16 @@ def main():
     ap.add_argument("--step", help="render this step and its carry chain")
     ap.add_argument("--out", default=str(HERE / "out"))
     ap.add_argument("--models", default=str(HERE / "models"))
+    # Spelled exactly as ComfyUI spells them. The album ran behind these and the
+    # command line was the one thing nobody wrote down; accepting the same
+    # strings means the two stacks are started the same way and argv says so.
+    ap.add_argument("--listen", metavar="HOST", help="accepted for parity; this is not a server")
+    ap.add_argument("--use-pytorch-cross-attention", action="store_true",
+                    help="ComfyUI parity: select the PyTorch SDPA attention backend")
+    ap.add_argument("--disable-smart-memory", action="store_true",
+                    help="ComfyUI parity: do not keep idle modules resident between stages")
+    ap.add_argument("--reserve-vram", type=float, metavar="GIB",
+                    help="ComfyUI parity: leave this many GiB to the rest of the machine")
     ap.add_argument("--lora", action="append", metavar="PATH:BRANCH[:STRENGTH]", default=[],
                     help="attach an adapter on top of the manifest's; repeatable")
     ap.add_argument("--no-lora", action="store_true", help="render with the manifest's adapters dropped")
@@ -82,6 +113,7 @@ def main():
         song.lora = [] if args.no_lora else list(song.lora)
         song.lora += [dict(zip(("path", "branch", "strength"), parse_lora(spec))) for spec in args.lora]
         song_module.validate(song)
+    song.pipeline = {**song.pipeline, **comfyui_parity(args)}
     steps = plan_order(song, args.step)
     describe(song, steps)
 

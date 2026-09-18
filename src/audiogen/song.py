@@ -96,6 +96,7 @@ class Song:
     abc_sampling: dict = field(default_factory=dict)
     semantic_sampling: dict = field(default_factory=dict)
     lora: list[dict] = field(default_factory=list)
+    pipeline: dict = field(default_factory=dict)
     steps: list[Step] = field(default_factory=list)
 
     @property
@@ -143,9 +144,16 @@ def load(root: Path) -> Song:
                 cfg_scale=spec.get("cfg_scale"), generation_config=spec.get("generation_config", {}),
                 abc_sampling=spec.get("abc_sampling", {}),
                 semantic_sampling=spec.get("semantic_sampling", {}),
-                lora=spec.get("lora", []), steps=steps)
+                lora=spec.get("lora", []), pipeline=spec.get("pipeline", {}), steps=steps)
     validate(song)
     return song
+
+
+# How the engine is constructed, as opposed to how it samples. Held apart from
+# generation_config because these decide memory layout and tiling, and a wrong
+# key here would otherwise be swallowed as a sampling override nobody asked for.
+PIPELINE_KEYS = {"backend", "quantization", "memory_budget_gib", "vae_core_frames",
+                 "offload_ar", "device"}
 
 
 def validate(song: Song) -> None:
