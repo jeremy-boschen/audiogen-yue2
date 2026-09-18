@@ -1,0 +1,24 @@
+{
+  "id": "guitar_seed780",
+  "seed": 780,
+  "cot": "full",
+  "cfg_scale": 1.0,
+  "generation_config": {
+    "rng_device": "cpu",
+    "ode_steps": 32
+  },
+  "semantic_sampling": {
+    "temperature": 1.0,
+    "top_p": 0.95,
+    "top_k": 100,
+    "repetition_penalty": 1.2
+  },
+  "steps": [
+    {
+      "id": "riff",
+      "seconds": 45,
+      "style_file": "style.txt",
+      "lyrics_file": "lyrics.txt"
+    }
+  ]
+}

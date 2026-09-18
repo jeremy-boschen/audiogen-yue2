@@ -16,7 +16,7 @@ from pathlib import Path
 
 import numpy as np
 
-from . import hashes, lora
+from . import hashes, lora, shims
 from .song import PIPELINE_KEYS, Song, Step, seconds_to_tokens
 
 SAMPLE_RATE = 48000
@@ -57,6 +57,8 @@ def build_pipeline(models: Path, song: Song, *, progress: bool = True):
     from yue2.pipeline import YuE2Pipeline
     from yue2.protocol import GenerationConfig
 
+    if shims.active():
+        raise ValueError("Production rendering requires an engine profile; restart without experimental shims")
     config = GenerationConfig(**song.generation_config)
     # The ComfyUI album ran behind three launch flags that changed the audio and
     # were written down nowhere. The engine's equivalents are constructor
@@ -65,8 +67,17 @@ def build_pipeline(models: Path, song: Song, *, progress: bool = True):
     unknown = set(song.pipeline) - PIPELINE_KEYS
     if unknown:
         raise ValueError(f"unknown pipeline keys {sorted(unknown)}; known: {sorted(PIPELINE_KEYS)}")
+    import torch
+    options = dict(song.pipeline)
+    # Explicit user selection wins; preserve the validated MPS default for songs.
+    if "profile" not in options:
+        device = options.get("device", "auto")
+        is_mps = device == "mps" or (device == "auto" and not torch.cuda.is_available()
+                                      and torch.backends.mps.is_available())
+        options["profile"] = "comfyui-yue2-mps-v1" if is_mps else "official"
     pipe = YuE2Pipeline(Path(models) / "YuE2-3B", Path(models) / "YuE2-Vae",
-                        generation_config=config, progress=progress, **song.pipeline)
+                        generation_config=config, progress=progress, **options)
+    pipe.audiogen_numerics = pipe.profile.name if pipe.profile.name != "official" else None
     adapters = lora.from_manifest(song.lora)
     if adapters:
         # Attached through the engine's hook rather than by patching pipe._model:
@@ -93,7 +104,12 @@ def native_result(pipe, song: Song, step: Step, plan, semantic, latents, audio, 
                                    {**song.semantic_sampling, "max_tokens": step.new_tokens})
     adapters = [a.identity() for a in lora.from_manifest(song.lora)]
     config["audiogen"] = {"step": step.id, "adapters": adapters or None,
-                          "carried": carried_note(step)}
+                          "carried": carried_note(step), "shims": shims.active() or None,
+                          "numerics": getattr(pipe, "audiogen_numerics", None),
+                          "audio_writer": "yue2.pipeline.SongResult", "pcm_bits": 24}
+    if getattr(pipe, "audiogen_numerics", None):
+        from .parity import runtime_identity
+        config["audiogen"]["numerics_identity"] = runtime_identity(pipe.profile)
     return SongResult(audio=np.asarray(audio), sample_rate=SAMPLE_RATE, semantic=semantic,
                       latents=np.asarray(latents), config=config, weights=pipe.weights,
                       timing=timing,
@@ -110,18 +126,47 @@ def request_id(song: Song, step: Step) -> str:
 
     The engine only checks that this is filename-safe -- it never reaches the
     prompt or the token stream, so an arm tag cannot confound a comparison. It
-    does reach the listening page, which titles each case by it, and two arms of
-    an A/B that print the same title are not a comparison anyone can read.
+    does reach the listening page, which titles each case by it (listen.py:201
+    reads request.json's id and falls back to the directory name), and two arms
+    of an A/B that print the same title are not a comparison anyone can read.
+
+    A label replaces the derived name outright. When a run is a numbered step in
+    an experiment, the step number is what the take should be called on the page
+    -- deriving a title from the manifest just makes the reader translate. The
+    shims stay recorded in config["audiogen"]["shims"] either way, so naming a
+    take after the step loses nothing.
+
+    protocol.py:107 requires [A-Za-z0-9][A-Za-z0-9_.-]{0,179}, so a space in a
+    label becomes an underscore. "Step 1a" is stored and displayed as "Step_1a".
     """
-    tag = ".".join(f"{a.path.stem}-x{a.strength:g}" for a in lora.from_manifest(song.lora))
-    name = f"{song.id}.{step.id}" + (f".{tag}" if tag else "")
+    if song.label:
+        safe = re.sub(r"[^A-Za-z0-9_.-]", "_", song.label).lstrip("._-")[:180]
+        if not safe:
+            raise SystemExit(f"--label {song.label!r} has no filename-safe characters")
+        return safe
+    parts = [f"{a.path.stem}-x{a.strength:g}" for a in lora.from_manifest(song.lora)]
+    parts += [f"shim-{s}" for s in shims.active()]
+    name = ".".join([f"{song.id}.{step.id}", *parts])
     return re.sub(r"[^A-Za-z0-9_.-]", "-", name)[:180]
 
 
 def request_for(song: Song, step: Step):
     from yue2.protocol import SongRequest
-    return SongRequest(style=song.style, lyrics=song.lyrics, id=request_id(song, step),
-                       seed=step.seed, cot=song.cot, abc=song.abc, cfg_scale=song.cfg_scale)
+    # FL-YuE2 runtime.make_plan strips supplied ABC before encoding it. A final
+    # newline changes a token even when the resulting prefix length is unchanged.
+    def text_input(key, fallback):
+        filename = getattr(step, key, None)
+        return (song.root / filename).read_text() if filename is not None else fallback
+
+    score = text_input("score_file", song.abc)
+    abc = score.strip() or None if score is not None else None
+    # Unlike ABC, the reference Plan node preserves style/lyrics verbatim.
+    # Explicit per-step files must retain even a trailing newline. Song-level
+    # defaults keep the wrapper's existing normalized-file convention.
+    style = text_input("style_file", song.style)
+    lyrics = text_input("lyrics_file", song.lyrics)
+    return SongRequest(style=style, lyrics=lyrics, id=request_id(song, step),
+                       seed=step.seed, cot=song.cot, abc=abc, cfg_scale=song.cfg_scale)
 
 
 def render_step(pipe, song: Song, step: Step, previous: Take | None = None) -> Take:
@@ -184,7 +229,7 @@ def render_step(pipe, song: Song, step: Step, previous: Take | None = None) -> T
 
 # Variables that can change what gets rendered: threading, backend selection,
 # device visibility, and which weights HF_HOME/HF_HUB_OFFLINE resolve to.
-ENV_PREFIXES = ("PYTORCH", "TORCH", "MPS", "OMP", "MKL", "CUDA", "HF_")
+ENV_PREFIXES = ("PYTORCH", "TORCH", "MPS", "MTLFLASH", "OMP", "MKL", "CUDA", "HF_")
 SECRETISH = ("TOKEN", "KEY", "SECRET", "PASSWORD", "AUTH", "CREDENTIAL")
 
 
@@ -249,6 +294,7 @@ def provenance(song: Song, takes: list[Take], models: Path) -> dict:
             "env": recorded_env(),
         },
         "pipeline": song.pipeline or None,
+        "shims": shims.active() or None,
         "lora": [adapter.identity() for adapter in lora.from_manifest(song.lora)] or None,
         "request": {
             "seed": song.seed, "cot": song.cot, "cfg_scale": song.cfg_scale,

@@ -1,0 +1,24 @@
+{
+  "id": "baseline01_riff_greedy",
+  "_target": "ComfyUI 01-riff.json node 20 (branch B, guitar) -- the head of the Burn It Down lineage",
+  "seed": 777,
+  "cot": "full",
+  "semantic_sampling": {
+    "temperature": 0.0,
+    "top_p": 0.95,
+    "top_k": 100,
+    "repetition_penalty": 1.2,
+    "penalty_window": 50,
+    "min_tokens": 200,
+    "max_tokens": 1125
+  },
+  "generation_config": {
+    "rng_device": "cpu"
+  },
+  "steps": [
+    {
+      "id": "riff",
+      "seconds": 45.0
+    }
+  ]
+}

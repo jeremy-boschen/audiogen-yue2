@@ -18,7 +18,7 @@ import sys
 HERE = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(HERE / "src"))
 
-from audiogen import lora as lora_module  # noqa: E402
+from audiogen import lora as lora_module
 from audiogen import render as renderer  # noqa: E402
 from audiogen import song as song_module  # noqa: E402
 
@@ -95,11 +95,15 @@ def main():
                     help="ComfyUI parity: do not keep idle modules resident between stages")
     ap.add_argument("--reserve-vram", type=float, metavar="GIB",
                     help="ComfyUI parity: leave this many GiB to the rest of the machine")
+    ap.add_argument("--label", metavar="NAME",
+                    help="name this take on the listening page, e.g. 'Step 1a'")
     ap.add_argument("--lora", action="append", metavar="PATH:BRANCH[:STRENGTH]", default=[],
                     help="attach an adapter on top of the manifest's; repeatable")
     ap.add_argument("--no-lora", action="store_true", help="render with the manifest's adapters dropped")
     ap.add_argument("--dry-run", action="store_true", help="resolve the manifest, load no weights")
     ap.add_argument("--quiet", action="store_true")
+    ap.add_argument("--profile", choices=("official", "comfyui-yue2-mps-v1"),
+                    help="engine numerical profile; defaults to ComfyUI parity on MPS")
     args = ap.parse_args()
 
     root = pathlib.Path(args.song)
@@ -114,6 +118,9 @@ def main():
         song.lora += [dict(zip(("path", "branch", "strength"), parse_lora(spec))) for spec in args.lora]
         song_module.validate(song)
     song.pipeline = {**song.pipeline, **comfyui_parity(args)}
+    if args.profile is not None:
+        song.pipeline["profile"] = args.profile
+    song.label = args.label
     steps = plan_order(song, args.step)
     describe(song, steps)
 

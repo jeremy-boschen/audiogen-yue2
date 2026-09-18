@@ -1,0 +1,80 @@
+{
+  "prompt": {
+    "23": {
+      "class_type": "SaveAudioAdvanced",
+      "inputs": {
+        "audio": [
+          "22",
+          0
+        ],
+        "filename_prefix": "audio/YuE2/parity_goal_validation/guitar_seed780",
+        "format": "flac",
+        "quality": "V0"
+      }
+    },
+    "22": {
+      "class_type": "FL_YuE2_Decode",
+      "inputs": {
+        "audio_decoder": [
+          "1",
+          1
+        ],
+        "music_latents": [
+          "21",
+          0
+        ],
+        "tile_frames": 1024
+      }
+    },
+    "1": {
+      "class_type": "FL_YuE2_ModelLoader",
+      "inputs": {
+        "download_missing": false
+      }
+    },
+    "21": {
+      "class_type": "FL_YuE2_Render",
+      "inputs": {
+        "music_model": [
+          "1",
+          0
+        ],
+        "composition": [
+          "20",
+          0
+        ],
+        "max_duration": 45,
+        "acoustic_steps": 32,
+        "temperature": 1.0,
+        "top_p": 0.95,
+        "top_k": 100,
+        "repetition_penalty": 1.2,
+        "guidance": 1.0
+      }
+    },
+    "20": {
+      "class_type": "FL_YuE2_Plan",
+      "inputs": {
+        "music_model": [
+          "1",
+          0
+        ],
+        "style": "English, smoky low female vocal, moody guitar rock, overdriven lead electric guitar, driving sub bass, tight gated drums, heavy reverb and tape saturation, cinematic and melancholic, 104 BPM",
+        "lyrics": "[Verse]\nCigarette burns along the dashboard\nThree a.m. and the tank runs dry\nYou said forever like it cost you nothing\nCheapest little word to ever pass your lips\n\n[Chorus]\nSo burn it down, burn it down\nI don't want the ashes back\nEvery promise written in the smoke\nEvery road that turns to black\n\n[Verse]\nStreetlight bleeding through a broken window\nWearing your jacket like a loaded gun\nI learned your language, learned to speak in exits\nLearned the only way to win is not to run\n\n[Chorus]\nSo burn it down, burn it down\nI don't want the ashes back\nEvery promise written in the smoke\nEvery road that turns to black\n\n[Bridge]\nNo saints left in this city\nNo mercy in the rain\nI'd rather feel the fire\nThan never feel again\n\n[Chorus]\nSo burn it down, burn it down\nI don't want the ashes back\nEvery promise written in the smoke\nEvery road that turns to black\n\n[Outro]\nBurn it down\nBurn it down",
+        "planning": "full",
+        "seed": 780,
+        "score_abc": "X:1\nT:\nM:4/4\nL:1/16\nQ:1/4=105\nV: Vocal clef=treble name=\"Vocal Melody\" snm=\"Vocal\"\nV: Ins clef=treble name=\"Ins Melody\" snm=\"Inst.\"\nK:D#m\n% intro\nV: Vocal\n\"D#m\"z16|\"D#m\"z16|\"D#m\"z16|\"D#m\"z16|\nV: Ins\nD2D2D2D2D2D2D2D2|D2D2D2D2D2D2F2E2|D2D2D2D2D2D2D2D2|D2D2D2D2F2E2C2C2|\nV: Vocal\n\"D#m\"z16|\"D#m\"z16|\"B\"z16|\"G#m\"z16|\nV: Ins\nD2A,2F2E4A,4C2-|C12-C2z2|B,2B,2F2E4B,4C2-|C6z2F2E2C4|\nV: Vocal\n\"D#m\"z16|\"D#m\"z16|\"B\"z16|\"G#m\"z16|\nV: Ins\nD2A,2F2E4A,4C2-|C12-C2z2|B,2B,2F2E4B,4C2-|C6z2F2E2C4|\n% verse\nV: Vocal\n\"D#m\"z8c2d2d4|\"D#m\"d2c2c2c4A4A2-|\"B\"A4A4z8|\"G#m\"z16|\nV: Ins\nZ2|z8B2B2B2B2|G2G2G2G2G2G2G2G2|\nV: Vocal\n\"D#m\"z8c2d4d2-|\"D#m\"d2c2c2c4A4A2-|\"B\"A2z12z2|\"G#m\"z16|\nV: Ins\nA2A2A2A2z8|Z|z12z2B2|G2G2G2G2G2G2G2G2|\nV: Vocal\n\"D#m\"z6d2d2d4g2|\"D#m\"g2f4e4d4g2-|\"B\"g4f2eze4d4|\"G#m\"z16|\nV: Ins\nd2z2d2z8z2|Z3|\nV: Vocal\n\"D#m\"z8c2d2d2d2|\"D#m\"d2c2c2c2AzA4A2-|\"B\"A4A4A4z4|\"G#m\"z6d2a4d4|\nV: Ins\nZ4|\n% chorus\nV: Vocal\n\"D#m\"d2c2z12|\"D#m\"z8a4d4|\"B\"d2c2z12|\"G#m\"e2f2e2f2e3c3A2-|\nV: Ins\nZ4|\nV: Vocal\n\"D#m\"A2z8d2d2g2-|\"D#m\"g2f2e2f2e3c3A2-|\nV: Ins\nZ2|\nV: Vocal\nM:3/4\n\"B\"A2z4A2A2A2-|\nV: Ins\nM:3/4\nZ|\nV: Vocal\nM:4/4\n\"G#m\"A2A4A4G4A2-|\"D#m\"A2z12z2|\"D#m\"z16|\"B\"z16|\nV: Ins\nM:4/4\nZ|z4f2e4A4c2-|c12-c2z2|z4f2e4B4c2-|\nV: Vocal\n\"G#m\"z16|\nV: Ins\nc6z2f2e2d4|\n% verse\nV: Vocal\n\"D#m\"z8c2d4d2|\"D#m\"c2c2c2c2c3A3A2-|\"B\"A4A4z8|\"G#m\"z16|\nV: Ins\nZ3|z4A2A2A2A2A2A2|\nV: Vocal\n\"D#m\"z6c2c2d4d2|\"D#m\"c2c2c2c2c3A3A2-|\"B\"A2z12z2|\"G#m\"z16|\nV: Ins\nA2z2c2z8z2|Z|z12d2d2|Z|\nV: Vocal\n\"D#m\"z6d2d2d4g2|\"D#m\"g2f4e2d2d4g2-|\"B\"g4f4e4d4|\"G#m\"z16|\nV: Ins\nz4d2z8z2|Z3|\nV: Vocal\n\"D#m\"z8c2d2d2d2|\"D#m\"d2c4c4A4A2-|\"B\"A2z2A2A4z6|z6d2a4d4|\nV: Ins\nZ4|\n% chorus\nV: Vocal\n\"D#m\"d2c2z12|\"D#m\"z8a4d4|\"B\"d2c2z12|\"G#m\"e2f2e2f2e3c3A2-|\nV: Ins\nZ4|\nV: Vocal\n\"D#m\"A2z8d2d2g2-|\"D#m\"g2f2e2f2e3c3A2-|\"B\"A2z8A2A2A2-|\"G#m\"A2A4A4A4A2-|\nV: Ins\nZ4|\nV: Vocal\n\"D#m\"A2z12z2|\"D#m\"z16|\"B\"z16|\"G#m\"z16|\nV: Ins\nz4f2e4A4c2-|c12-c2z2|A4f2e4A4c2-|c6z2f2e2c4|\n% bridge\nV: Vocal\n\"B\"z6d2g2a2a2g2|\"C#\"g4g4z8|\"D#m\"z6d2g2a2a2g2|\"F#\"g6f2e6d2-|\nV: Ins\nZ4|\nV: Vocal\n\"B\"d2z4d2g2a2a2g2|\"C#\"g4g4z8|\"D#m\"z6d2d2d4f2-|\"F#\"f4e2e6z4|\nV: Ins\nZ4|\nV: Vocal\n\"D#m\"z16|\"D#m\"z6d2a4d4|\nV: Ins\nd2d2d2d2d2d2d2d2|d2d2d2z8z2|\n% chorus\nV: Vocal\n\"D#m\"d2c2z12|\"D#m\"z8a4d4|\"B\"d2c2z4\"G#m\"e2f2e2f2|\"G#m\"e3c3A4z6|\nV: Ins\nZ4|\nV: Vocal\n\"D#m\"z8z2d2d2g2-|\"D#m\"g2f2e2f2e3c3A2-|\"B\"A2z8A2A2A2-|\"G#m\"A2A4A4A4A2-|\nV: Ins\nZ4|\nV: Vocal\n\"D#m\"A2z12z2|\"D#m\"z4zz8z3|\nV: Ins\nz4f2e4A4c2-|c4-cz8z3|\n"
+      }
+    },
+    "24": {
+      "class_type": "FL_YuE2_SaveTokens",
+      "inputs": {
+        "music_tokens": [
+          "21",
+          1
+        ],
+        "name": "parity_goal_validation_guitar_seed780"
+      }
+    }
+  }
+}

@@ -13,7 +13,7 @@ source .venv/bin/activate
 | path | what it is |
 |---|---|
 | `env/pins.env` | every pinned revision: python, the fork commit, torch, weight SHAs |
-| `env/requirements.lock.txt` | 35 packages, 852 hashes, installed with `--require-hashes` |
+| `env/requirements.lock.txt` | exact standalone package versions and hashes, installed with `--require-hashes` |
 | `setup.sh` | builds the environment from those pins; idempotent |
 | `src/audiogen/` | our conventions over the library (see the module docstring) |
 | `songs/<name>/` | what defines a song: score, lyrics, style, request, manifest |
@@ -26,9 +26,20 @@ source .venv/bin/activate
   decoded PCM. It changes only when reproduction of that album needs it.
 - **This repo** is where new work happens.
 
-They do not produce the same audio and are not meant to. See
-[docs/MATCHING_COMFYUI.md](docs/MATCHING_COMFYUI.md) for the bisected reasons,
-including the one that no amount of porting fixes.
+The original album riff and complete four-stage Burn It Down lineage reproduce
+exactly on the verified Apple Silicon runtime, without ComfyUI packages. Two
+additional seeds and a second fixture also match; the full chain and validation
+cases pass repeated runs in a fresh environment. The
+default MPS profile matches the measured normalization, attention, continuation
+sampling and decoder operations. See
+[docs/PARITY_ACCEPTANCE.md](docs/PARITY_ACCEPTANCE.md) for acceptance status and
+[docs/PARITY_PROGRESS.md](docs/PARITY_PROGRESS.md) for the measured evidence.
+
+FLAC export uses the engine's native writer: 24-bit PCM at 48 kHz stereo.
+The numerical profile does not select an alternate audio writer. Historical
+16-bit ComfyUI exports remain preserved as reference artifacts.
+The export precision is recorded with the take. Numerical parity is scoped to the pinned runtime on Apple M5 Pro,
+macOS 26.6.2; other devices require their own measurements.
 
 ## The library fork
 
@@ -121,6 +132,13 @@ A carrying step hands the earlier take's semantic tokens to generation *and* its
 latents to synthesis, then asserts the carried tokens came back verbatim. If the
 continuation silently failed to take, the render stops rather than quietly
 producing a fresh song at the right length.
+
+Steps can select `score_file`, `lyrics_file`, and `style_file` relative to the
+song directory. Explicit style and lyrics files are read verbatim, including
+trailing newlines; ABC is trimmed as in the reference Plan node. Use these fields
+when importing exact reference requests. Song-level default text files retain
+the existing surrounding-whitespace normalization. The recorded chain is in
+`songs/burn_it_down_parity`.
 
 `--dry-run` validates the whole manifest -- carry order, carry length, leftover
 budget -- before a single weight loads. A bad manifest fails in milliseconds, not
@@ -228,3 +246,26 @@ already CPU), but the logits reaching the sampler come from device-specific
 kernels, and in bf16 one flipped logit diverges forever. To move a take between
 machines, move the artifact rather than the seed: `semantic.npy` skips the
 autoregressive amplifier, `latent.npy` leaves only a deterministic decode.
+
+The numerical environment is defined by `env/requirements.lock.txt` and
+`env/pins.env`. `setup.sh` installs the pinned engine with `--no-deps` because
+its distribution metadata still names the upstream runtime versions; this
+repository's validated lock supplies the matching reference versions.
+
+## Engine profiles
+
+The engine defaults to `official`. Audiogen selects `comfyui-yue2-mps-v1` on MPS
+unless the manifest's `pipeline.profile` or CLI `--profile` explicitly chooses
+otherwise. `official` follows untouched upstream behavior and requires automatic
+RNG selection; continuation, chunk/overlap/blend overrides and extra MPS cache
+drains belong to the compatibility profile. Production rendering rejects
+experimental shims; numerical choices belong in profiles. Historical shim
+diagnostics remain separate from the maintained compatibility profile.
+
+Normalization, AR/NAR attention, decoder padding and carried sampling history
+are implemented by engine-owned profiles. Audiogen performs no runtime patching
+for this path. It retains historical input formatting and delegates audio export to the engine.
+The profile is also supplied as an immutable object through the engine API;
+see `../YuE/docs/NUMERICAL_PROFILES.md` for its interface and runtime contract.
+
+Profile migration evidence is recorded in `docs/PROFILE_MIGRATION.md`.

@@ -55,6 +55,9 @@ class Step:
     blend_seconds: float = 0.0
     chunk_seconds: float = 0.0
     overlap_seconds: float = 0.0
+    score_file: str | None = None
+    lyrics_file: str | None = None
+    style_file: str | None = None
 
     @property
     def carry_tokens(self) -> int:
@@ -97,6 +100,9 @@ class Song:
     semantic_sampling: dict = field(default_factory=dict)
     lora: list[dict] = field(default_factory=list)
     pipeline: dict = field(default_factory=dict)
+    # What to call this take on the listening page. Set from --label, not the
+    # manifest: a step number belongs to the experiment, not to the song.
+    label: str | None = None
     steps: list[Step] = field(default_factory=list)
 
     @property
@@ -122,9 +128,12 @@ class Song:
 def load(root: Path) -> Song:
     root = Path(root)
     spec = json.loads((root / "song.json").read_text())
+    if "pcm_bits" in spec and (type(spec["pcm_bits"]) is not int or spec["pcm_bits"] != 24):
+        raise ValueError("Audiogen uses the engine native 24-bit FLAC writer; remove the pcm_bits override")
     seed = spec["seed"]
     known = {"id", "seed", "seconds", "max_tokens", "carry_from", "carry_seconds",
-             "carry_tokens", "blend_seconds", "chunk_seconds", "overlap_seconds"}
+             "carry_tokens", "blend_seconds", "chunk_seconds", "overlap_seconds",
+             "score_file", "lyrics_file", "style_file"}
     steps = []
     for raw in spec["steps"]:
         unknown = set(raw) - known
@@ -139,12 +148,16 @@ def load(root: Path) -> Song:
                           carry_token_count=raw.get("carry_tokens"),
                           blend_seconds=raw.get("blend_seconds", 0.0),
                           chunk_seconds=raw.get("chunk_seconds", 0.0),
-                          overlap_seconds=raw.get("overlap_seconds", 0.0)))
+                          overlap_seconds=raw.get("overlap_seconds", 0.0),
+                          score_file=raw.get("score_file"),
+                          lyrics_file=raw.get("lyrics_file"),
+                          style_file=raw.get("style_file")))
     song = Song(root=root, id=spec.get("id", root.name), seed=seed, cot=spec.get("cot", "full"),
                 cfg_scale=spec.get("cfg_scale"), generation_config=spec.get("generation_config", {}),
                 abc_sampling=spec.get("abc_sampling", {}),
                 semantic_sampling=spec.get("semantic_sampling", {}),
-                lora=spec.get("lora", []), pipeline=spec.get("pipeline", {}), steps=steps)
+                lora=spec.get("lora", []), pipeline=spec.get("pipeline", {}),
+                steps=steps)
     validate(song)
     return song
 
@@ -153,7 +166,7 @@ def load(root: Path) -> Song:
 # generation_config because these decide memory layout and tiling, and a wrong
 # key here would otherwise be swallowed as a sampling override nobody asked for.
 PIPELINE_KEYS = {"backend", "quantization", "memory_budget_gib", "vae_core_frames",
-                 "offload_ar", "device"}
+                 "offload_ar", "device", "profile"}
 
 
 def validate(song: Song) -> None:
@@ -174,6 +187,13 @@ def validate(song: Song) -> None:
     seen: set[str] = set()
     for step in song.steps:
         where = f"{song.id}: step {step.id!r}"
+        for key in ("score_file", "lyrics_file", "style_file"):
+            value = getattr(step, key)
+            if value is not None:
+                if not isinstance(value, str) or not value.strip():
+                    raise ValueError(f"{where}: {key} must be a nonempty file path")
+                if not (song.root / value).is_file():
+                    raise FileNotFoundError(song.root / value)
         if step.id in seen:
             raise ValueError(f"{song.id}: duplicate step id {step.id!r}")
 

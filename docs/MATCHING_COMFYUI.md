@@ -1,5 +1,11 @@
 # Matching the ComfyUI output
 
+> Superseded investigation notes. Current measured results and corrected causes
+> are in [PARITY_PROGRESS.md](PARITY_PROGRESS.md). The original album riff and
+> full recorded continuation chain now reproduce exactly without ComfyUI packages.
+> See [PARITY_ACCEPTANCE.md](PARITY_ACCEPTANCE.md) for remaining gates. The older
+> numerical comparisons below are not current acceptance proof.
+
 The album in [audiogen-comfyui](https://github.com/jeremy-boschen/audiogen-comfyui)
 was rendered by the ComfyUI FL-YuE2 node pack. This stack uses the official
 library. **They are different performers**, and the difference was bisected

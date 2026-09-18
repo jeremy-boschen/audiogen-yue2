@@ -105,9 +105,14 @@ print(f"    python  {__import__('sys').version.split()[0]}")
 print(f"    torch   {torch.__version__}   mps={torch.backends.mps.is_available()}")
 print(f"    yue2    {__import__('importlib.metadata', fromlist=['x']).version('yue2-infer')}  from {yue2.__file__}")
 config = GenerationConfig()
-assert hasattr(yue2.pipeline.YuE2Pipeline, "_stage_boundary"), "fork commits missing: no MPS stage guard"
+assert hasattr(yue2.pipeline.YuE2Pipeline, "_stage_boundary"), "fork commits missing: no profile stage boundary"
 assert "carry" in yue2.pipeline.YuE2Pipeline.generate_semantic.__code__.co_varnames, "fork commits missing: no carry="
 assert config.rng_device == "auto", "fork commits missing: no rng_device"
-print("    fork patches present: stage guard, carry=, rng_device")
+from yue2.profiles import OfficialProfile, ComfyUIYuE2MPSProfile
+assert "profile" in yue2.pipeline.YuE2Pipeline.__init__.__code__.co_varnames
+assert not OfficialProfile().supports_continuation
+assert ComfyUIYuE2MPSProfile().supports_continuation
+assert OfficialProfile().identity()["upstream_revision"] == "bd90e4ccae671d869b3ecaca6d7e893927d29442"
+print("    engine support present: upstream official profile, opt-in compatibility policies")
 PY
 say "Done. Activate with:  source ${VENV#$HERE/}/bin/activate"
