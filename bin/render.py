@@ -47,12 +47,26 @@ def describe(song, steps):
               f"{carried:>8.1f}s {step.new_tokens:>9}  {step.carry_from or '-'}")
 
 
+def parse_lora(spec: str):
+    """PATH, PATH:BRANCH or PATH:BRANCH:STRENGTH -- a colon-joined form of the manifest entry."""
+    path, _, rest = spec.partition(":")
+    branch, _, strength = rest.partition(":")
+    if not path or not branch:
+        # The branch is declared rather than sniffed: an adapter aimed at the
+        # wrong half of the model has to be an error, not a guess.
+        raise SystemExit(f"--lora {spec!r}: expected PATH:BRANCH[:STRENGTH], branch ar or nar")
+    return path, branch, (float(strength) if strength else 1.0)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("song")
     ap.add_argument("--step", help="render this step and its carry chain")
     ap.add_argument("--out", default=str(HERE / "out"))
     ap.add_argument("--models", default=str(HERE / "models"))
+    ap.add_argument("--lora", action="append", metavar="PATH:BRANCH[:STRENGTH]", default=[],
+                    help="attach an adapter on top of the manifest's; repeatable")
+    ap.add_argument("--no-lora", action="store_true", help="render with the manifest's adapters dropped")
     ap.add_argument("--dry-run", action="store_true", help="resolve the manifest, load no weights")
     ap.add_argument("--quiet", action="store_true")
     args = ap.parse_args()
@@ -61,13 +75,23 @@ def main():
     if not root.exists():
         root = HERE / "songs" / args.song
     song = song_module.load(root)          # validates before anything expensive happens
+    # An A/B is the same song twice, so the adapters move on the command line and
+    # the manifest stays one source of truth. The override is applied to the Song
+    # itself rather than passed around it, so provenance records what actually ran.
+    if args.no_lora or args.lora:
+        song.lora = [] if args.no_lora else list(song.lora)
+        song.lora += [dict(zip(("path", "branch", "strength"), parse_lora(spec))) for spec in args.lora]
+        song_module.validate(song)
     steps = plan_order(song, args.step)
     describe(song, steps)
 
     # Constructing the adapters checks each path and branch without loading a
     # model, so a missing or mislabelled LoRA fails here rather than after the
     # weights are in memory.
-    adapters = lora_module.from_manifest(song.lora)
+    try:
+        adapters = lora_module.from_manifest(song.lora)
+    except (ValueError, FileNotFoundError) as bad:
+        raise SystemExit(f"lora: {bad}")
     for adapter in adapters:
         print(f"  lora {adapter.branch:>3} x{adapter.strength:<4} {adapter.path.name}")
 
