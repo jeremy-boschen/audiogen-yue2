@@ -3,9 +3,11 @@
 #
 #   ./setup.sh [--venv PATH] [--dev] [--models PATH] [--skip-models]
 #
+# Weights come from MODELS_ROOT in env/pins.env unless --models says otherwise.
+#
 # Creates .venv/ (gitignored) from a hash-verified lockfile, then installs our
 # fork of the official inference library at the commit pinned in env/pins.env.
-# Idempotent: re-running re-pins everything.
+# Idempotent: re-running rebuilds the venv from scratch and re-pins everything.
 #
 # --dev installs the fork editable from a sibling checkout (../YuE) instead of
 # from the pin, so library changes take effect without a reinstall. Never use it
@@ -17,7 +19,7 @@ source "$HERE/env/pins.env"
 VENV="$HERE/.venv"
 DEV=0
 SKIP_MODELS=0
-MODELS_SRC=""   # reuse an existing weights dir instead of downloading 7.3 GB again
+MODELS_SRC="${MODELS_ROOT:-}"   # default: the shared root from pins.env; --models overrides
 while [ $# -gt 0 ]; do
   case "$1" in
     --venv)         VENV="$2"; shift 2 ;;
@@ -36,7 +38,10 @@ need git
 
 # ---------- venv ----------
 say "Python $PY_VERSION venv at $VENV"
-uv venv --python "$PY_VERSION" "$VENV" >/dev/null
+# --clear because the script claims to be idempotent and uv refuses an existing
+# venv without it. Rebuilding from the lockfile is also what makes re-running
+# meaningful: a package left behind by an earlier state would otherwise survive.
+uv venv --clear --python "$PY_VERSION" "$VENV" >/dev/null
 
 say "Installing locked dependencies (hash-verified)"
 VIRTUAL_ENV="$VENV" uv pip install -q --require-hashes -r "$HERE/env/requirements.lock.txt"
@@ -59,9 +64,14 @@ VIRTUAL_ENV="$VENV" uv pip install -q --no-deps -e "$HERE"
 # ---------- weights ----------
 if [ -n "$MODELS_SRC" ]; then
   say "Linking weights from $MODELS_SRC"
+  [ -d "$MODELS_SRC" ] || { echo "no weights directory at $MODELS_SRC" >&2; exit 1; }
   SRC="$(cd "$MODELS_SRC" && pwd)"
+  # Accept either the directory holding the model folders or its parent: the
+  # ComfyUI tree keeps them under a YuE2/ subdirectory, and passing the wrong
+  # one of the two is the whole reason this step used to fail at the very end.
+  [ -d "$SRC/YuE2-3B" ] || [ ! -d "$SRC/YuE2/YuE2-3B" ] || SRC="$SRC/YuE2"
   for name in YuE2-3B YuE2-Vae; do
-    [ -d "$SRC/$name" ] || { echo "missing $SRC/$name" >&2; exit 1; }
+    [ -d "$SRC/$name" ] || { echo "missing $SRC/$name -- expected the directory holding YuE2-3B and YuE2-Vae" >&2; exit 1; }
   done
   mkdir -p "$HERE/models"
   for name in YuE2-3B YuE2-Vae; do
