@@ -32,14 +32,21 @@ class Take:
     render_seconds: float
     plan_prefix_tokens: int = 0
     carried: dict = field(default_factory=dict)
+    result: object = None                  # the engine's SongResult, for its own writer
 
     def write(self, directory: Path) -> Path:
+        """Write the take in the engine's native artifact layout.
+
+        The layout matters beyond tidiness: the skill's listening page
+        (YuE/skills/yue2-music/scripts/listen.py) re-hashes every file it copies
+        against the `artifacts` block in result.json and withholds the player
+        when they disagree. That check is only worth anything if the receipt was
+        written by whatever produced the audio, so it is written here, from the
+        stage outputs still in memory, rather than reconstructed later from the
+        files on disk -- which would only prove the files equal themselves.
+        """
         directory.mkdir(parents=True, exist_ok=True)
-        import soundfile as sf
-        (directory / "score.abc").write_text(self.score)
-        np.save(directory / "semantic.npy", np.asarray(self.semantic, dtype=np.int32))
-        np.save(directory / "latent.npy", np.asarray(self.latents, dtype=np.float32))
-        sf.write(directory / f"{self.step_id}.flac", self.audio, SAMPLE_RATE, subtype="PCM_24")
+        self.result.save_artifacts(directory)
         return directory
 
 
@@ -57,6 +64,35 @@ def build_pipeline(models: Path, song: Song, *, progress: bool = True):
         # applied once from outside is silently dropped.
         pipe.on_model_ready.append(lora.hook(adapters))
     return pipe
+
+
+def native_result(pipe, song: Song, step: Step, plan, semantic, latents, audio, timing):
+    """Wrap our stage outputs in the engine's own result object.
+
+    `pipe.generate()` builds this on the way past; driving the stages by hand to
+    get a carry chain skips it, so it is rebuilt here from the same pieces. The
+    adapters go into the config because the engine's `weights` block pins the
+    base checkpoint, which is not what a LoRA take actually ran: without this,
+    two takes that differ only by an adapter carry the same request identity.
+    """
+    from yue2.pipeline import SongResult
+    from yue2.storage import identity
+
+    request = plan.request
+    config = pipe.effective_config(request, song.abc_sampling or None,
+                                   {**song.semantic_sampling, "max_tokens": step.new_tokens})
+    adapters = [a.identity() for a in lora.from_manifest(song.lora)]
+    config["audiogen"] = {"step": step.id, "adapters": adapters or None,
+                          "carried": carried_note(step)}
+    return SongResult(audio=np.asarray(audio), sample_rate=SAMPLE_RATE, semantic=semantic,
+                      latents=np.asarray(latents), config=config, weights=pipe.weights,
+                      timing=timing,
+                      request_identity=identity({"request": request.to_dict(), "config": config,
+                                                 "weights": pipe.weights}))
+
+
+def carried_note(step: Step) -> dict | None:
+    return None if step.carry_from is None else {"from": step.carry_from, "tokens": step.carry_tokens}
 
 
 def request_for(song: Song, step: Step):
@@ -111,11 +147,16 @@ def render_step(pipe, song: Song, step: Step, previous: Take | None = None) -> T
     audio = pipe.decode(latents)
     stages["pcm"] = {"hash": hashes.hash_array(audio), "shape": list(np.shape(audio))}
 
+    render_seconds = round(time.perf_counter() - clock, 1)
+    timing = {"abc": plan.timing, "semantic": semantic.timing,
+              "load": dict(pipe.load_timing), "e2e_seconds": render_seconds}
+    result = native_result(pipe, song, step, plan, semantic, latents, audio, timing)
+
     return Take(step_id=step.id, semantic=list(semantic.tokens), latents=np.asarray(latents),
                 audio=np.asarray(audio), score=plan.abc, stages=stages,
                 seconds=round(len(semantic.tokens) / 25, 2),
-                render_seconds=round(time.perf_counter() - clock, 1),
-                plan_prefix_tokens=len(plan.prefix), carried=carried)
+                render_seconds=render_seconds,
+                plan_prefix_tokens=len(plan.prefix), carried=carried, result=result)
 
 
 def provenance(song: Song, takes: list[Take], models: Path) -> dict:
