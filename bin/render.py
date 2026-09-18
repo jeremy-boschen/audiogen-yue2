@@ -17,6 +17,7 @@ import sys
 HERE = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(HERE / "src"))
 
+from audiogen import lora as lora_module  # noqa: E402
 from audiogen import render as renderer  # noqa: E402
 from audiogen import song as song_module  # noqa: E402
 
@@ -63,8 +64,16 @@ def main():
     steps = plan_order(song, args.step)
     describe(song, steps)
 
+    # Constructing the adapters checks each path and branch without loading a
+    # model, so a missing or mislabelled LoRA fails here rather than after the
+    # weights are in memory.
+    adapters = lora_module.from_manifest(song.lora)
+    for adapter in adapters:
+        print(f"  lora {adapter.branch:>3} x{adapter.strength:<4} {adapter.path.name}")
+
     if args.dry_run:
-        print("\ndry run: manifest resolves and every carry is satisfiable")
+        print("\ndry run: manifest resolves, every carry is satisfiable"
+              f"{', adapters found' if adapters else ''}")
         return 0
 
     out = pathlib.Path(args.out).expanduser() / song.id

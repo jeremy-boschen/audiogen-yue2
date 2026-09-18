@@ -130,6 +130,48 @@ Each run writes `provenance.json` next to the takes: resolved torch and
 `yue2-infer` versions, device, seeds, sampling, hashes of style and lyrics, and
 every stage hash per take.
 
+## LoRA adapters
+
+```json
+"lora": [
+  {"path": "~/loras/nar_lora_joint_v4.safetensors", "branch": "nar", "strength": 1.0}
+]
+```
+
+Adapters attach through the engine's `on_model_ready` hook rather than by patching
+`pipe._model`. That matters: the engine constructs its model lazily, drops it on
+`close()`, moves it to CPU around decoding, prepares it for fp8 on the AR path and
+restores it before NAR. A patch applied once from outside is silently dropped.
+The hook fires on **every stage entry** and says which stage is about to run, so
+an `ar` adapter and a `nar` adapter each attach to the branch they belong to and
+detach when the other stage starts.
+
+Because the hook fires repeatedly, the apply has to be idempotent: each modified
+tensor's base value is captured the first time it is touched, and every apply
+starts from that base rather than from whatever the last one left behind. A naive
+additive apply would compound the same delta once per stage.
+
+Two tensor layouts are supported: the low-rank pair (`lora_down`/`lora_up`,
+contributing `up @ down`) and a dense `diff`/`diff_b` used where a projection is
+too narrow for low rank to buy anything.
+
+`branch` is checked against the engine's own module names. `llm2vae` and `vae2llm`
+look shared but are **not** -- every use of them in the engine is on the NAR path,
+so they count as NAR. A module that cannot be classified is an error rather than a
+guess, since applying a delta on the wrong stage is silent and shows up only as a
+take that sounds subtly wrong.
+
+**Strength 0 must be bit-identical to no adapter at all.** That is the test worth
+running against any new adapter, because it fails loudly when the key mapping is
+wrong. Verified against the real 3B and `nar_lora_joint_v4`: 200 tensors resolve,
+strength 0 changes nothing, strength 1 changes all 200, and entering the AR stage
+restores every one.
+
+`--dry-run` constructs the adapters without loading a model, so a missing file, a
+bad branch or a typo'd key fails in milliseconds. Each adapter's path, branch,
+strength and file hash are recorded in `provenance.json`, so a take names what
+shaped it.
+
 ## The canary
 
 `bin/canary.py` renders `songs/_canary` and hashes **every stage boundary**, not

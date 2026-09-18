@@ -13,7 +13,7 @@ from pathlib import Path
 
 import numpy as np
 
-from . import hashes
+from . import hashes, lora
 from .song import Song, Step, seconds_to_tokens
 
 SAMPLE_RATE = 48000
@@ -48,8 +48,15 @@ def build_pipeline(models: Path, song: Song, *, progress: bool = True):
     from yue2.protocol import GenerationConfig
 
     config = GenerationConfig(**song.generation_config)
-    return YuE2Pipeline(Path(models) / "YuE2-3B", Path(models) / "YuE2-Vae",
+    pipe = YuE2Pipeline(Path(models) / "YuE2-3B", Path(models) / "YuE2-Vae",
                         generation_config=config, progress=progress)
+    adapters = lora.from_manifest(song.lora)
+    if adapters:
+        # Attached through the engine's hook rather than by patching pipe._model:
+        # the engine rebuilds and moves that model between stages, so a patch
+        # applied once from outside is silently dropped.
+        pipe.on_model_ready.append(lora.hook(adapters))
+    return pipe
 
 
 def request_for(song: Song, step: Step):
@@ -126,6 +133,7 @@ def provenance(song: Song, takes: list[Take], models: Path) -> dict:
                       else "mps" if torch.backends.mps.is_available() else "cpu",
             "models": str(models),
         },
+        "lora": [adapter.identity() for adapter in lora.from_manifest(song.lora)] or None,
         "request": {
             "seed": song.seed, "cot": song.cot, "cfg_scale": song.cfg_scale,
             "generation_config": song.generation_config,

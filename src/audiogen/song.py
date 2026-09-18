@@ -95,6 +95,7 @@ class Song:
     generation_config: dict = field(default_factory=dict)
     abc_sampling: dict = field(default_factory=dict)
     semantic_sampling: dict = field(default_factory=dict)
+    lora: list[dict] = field(default_factory=list)
     steps: list[Step] = field(default_factory=list)
 
     @property
@@ -141,7 +142,8 @@ def load(root: Path) -> Song:
     song = Song(root=root, id=spec.get("id", root.name), seed=seed, cot=spec.get("cot", "full"),
                 cfg_scale=spec.get("cfg_scale"), generation_config=spec.get("generation_config", {}),
                 abc_sampling=spec.get("abc_sampling", {}),
-                semantic_sampling=spec.get("semantic_sampling", {}), steps=steps)
+                semantic_sampling=spec.get("semantic_sampling", {}),
+                lora=spec.get("lora", []), steps=steps)
     validate(song)
     return song
 
@@ -153,6 +155,13 @@ def validate(song: Song) -> None:
             raise FileNotFoundError(song.root / required)
     if not song.steps:
         raise ValueError(f"{song.id}: no steps")
+
+    for entry in song.lora:
+        unknown = set(entry) - {"path", "branch", "strength"}
+        if unknown:
+            raise ValueError(f"{song.id}: lora entry has unknown keys {sorted(unknown)}")
+        if "path" not in entry or "branch" not in entry:
+            raise ValueError(f"{song.id}: a lora entry needs both path and branch")
 
     seen: set[str] = set()
     for step in song.steps:
