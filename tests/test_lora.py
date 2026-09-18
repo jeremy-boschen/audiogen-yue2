@@ -162,7 +162,16 @@ class TestRejection:
         with pytest.raises(KeyError, match="does not have"):
             lora.deltas(model, lora.Adapter(path, "nar"))
 
-    def test_an_adapter_contributing_nothing_is_rejected(self, model, tmp_path):
+    def test_a_mislabelled_branch_is_rejected_before_a_model_is_loaded(self, model, tmp_path):
+        """The header names the branch, so this costs nothing and fails at --dry-run."""
         path = make_adapter(tmp_path, model, branch="nar")
-        with pytest.raises(ValueError, match="contributed nothing"):
-            lora.deltas(model, lora.Adapter(path, "ar"))
+        with pytest.raises(ValueError, match="would apply nothing"):
+            lora.Adapter(path, "ar")
+
+    def test_an_unclassifiable_adapter_keeps_the_precise_error(self, model, tmp_path):
+        """The early check must not mask deltas()' better diagnosis."""
+        path = tmp_path / "odd.safetensors"
+        save_file({"model.layers.0.ghost_proj.diff": torch.zeros(4, 4)}, str(path))
+        assert lora.branches_in(path) == set()
+        with pytest.raises(KeyError, match="does not have"):
+            lora.deltas(model, lora.Adapter(path, "nar"))

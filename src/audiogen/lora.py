@@ -46,12 +46,29 @@ class Adapter:
             raise ValueError(f"lora branch must be 'ar' or 'nar', not {self.branch!r}")
         if not self.path.exists():
             raise FileNotFoundError(self.path)
+        present = branches_in(self.path)
+        if present and self.branch not in present:
+            # deltas() catches this too, but only once the model is in memory.
+            # The file's own key names answer it from the header, so a mislabelled
+            # adapter fails during --dry-run instead of 14 minutes later.
+            # Only when the file *does* classify: an unclassifiable one has more
+            # precise errors waiting in deltas(), and they should be the ones seen.
+            raise ValueError(f"{self.path.name} carries {'/'.join(sorted(present))} modules, "
+                             f"so branch {self.branch!r} would apply nothing")
 
     def identity(self) -> dict:
         """Recorded per take, so a rendered song names the adapter that shaped it."""
         digest = hashlib.sha256(self.path.read_bytes()).hexdigest()[:16]
         return {"path": str(self.path), "branch": self.branch,
                 "strength": self.strength, "sha256_16": digest}
+
+
+def branches_in(path: Path) -> set[str]:
+    """Which branches an adapter file actually touches, from its header alone."""
+    from safetensors import safe_open
+    with safe_open(str(path), framework="pt") as handle:
+        keys = list(handle.keys())
+    return {b for b in (branch_of(k) for k in keys) if b is not None}
 
 
 def read(path: Path) -> tuple[dict, dict]:
