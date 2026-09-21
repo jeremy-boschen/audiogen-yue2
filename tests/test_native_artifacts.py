@@ -39,6 +39,9 @@ def a_take(step_id="a", seed=1234):
 
 def test_write_lays_down_the_native_receipt(tmp_path):
     a_take().write(tmp_path)
+    import soundfile as sf
+    info = sf.info(tmp_path / "audio.flac")
+    assert (info.samplerate, info.channels, info.subtype) == (48000, 2, "PCM_24")
     for name in ("audio.flac", "request.json", "config.json", "result.json",
                  "score.abc", "semantic.npy", "latent.npy"):
         assert (tmp_path / name).is_file(), f"{name} missing"

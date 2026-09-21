@@ -1,7 +1,0 @@
-{
-  "source_audio": "/Users/newtycoffee/dev/ai/ComfyUI/output/audio/YuE2/_archive/2026-09-16_reset/02_takes_45s/swap_A_synth_00001.flac",
-  "source_sha256": "696f4516962db788ac286a8b68dc90914c0e5d8d7f85a6d7d328380c082232be",
-  "reference_take": "parity_goal_validation_synth_seed777",
-  "seed_override": 777,
-  "reference_audio_prefix": "audio/YuE2/parity_goal_validation/synth_seed777"
-}

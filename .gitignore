@@ -42,3 +42,8 @@ __pycache__/
 .DS_Store
 .idea/
 .vscode/
+
+# Working convenience links into the wrapper's album directory. They are
+# absolute paths on one machine, so committing one puts a dead link in the
+# repo for everyone else.
+songs/cheap_arcade

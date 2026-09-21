@@ -1,4 +1,4 @@
-"""Request normalization at the same boundary as the reference Plan node."""
+"""Song request normalization and per-step text selection."""
 from types import SimpleNamespace
 
 import pytest
@@ -12,7 +12,7 @@ from audiogen.render import request_for
     (' \n\t', None),
     (None, None),
 ])
-def test_plan_score_matches_reference_whitespace_boundary(abc, expected):
+def test_score_trims_outer_whitespace(abc, expected):
     song = SimpleNamespace(style='rock', lyrics='[verse]\nhello', id='fixture',
                            label=None, lora=[], cot='full', abc=abc, cfg_scale=None)
     step = SimpleNamespace(seed=777, id='riff')

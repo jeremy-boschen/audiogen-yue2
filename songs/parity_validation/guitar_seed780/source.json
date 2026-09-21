@@ -1,7 +1,0 @@
-{
-  "source_audio": "/Users/newtycoffee/dev/ai/ComfyUI/output/audio/YuE2/_archive/2026-09-16_reset/02_takes_45s/swap_B_guitar_00001.flac",
-  "source_sha256": "349b78977055f71d2e4d20716beb519ec54435cf6534228aaa4327d601be8a4f",
-  "reference_take": "parity_goal_validation_guitar_seed780",
-  "seed_override": 780,
-  "reference_audio_prefix": "audio/YuE2/parity_goal_validation/guitar_seed780"
-}

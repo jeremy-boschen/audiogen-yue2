@@ -1,0 +1,11 @@
+{
+  "id": "example",
+  "seed": 777,
+  "cot": "full",
+  "steps": [
+    {
+      "id": "take",
+      "seconds": 45
+    }
+  ]
+}

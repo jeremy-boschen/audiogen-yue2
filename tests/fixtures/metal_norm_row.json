@@ -1,9 +1,0 @@
-{
-  "reference": "out/parity/reference_runtime_prefix",
-  "engine": "out/parity/engine_normc_runtime_prefix",
-  "row": 1,
-  "epsilon": 1e-06,
-  "dtype": "bfloat16",
-  "fixture_sha256": "b4765ef267826f9a5ca38e238bdc46338f0bfeb0fc7bd5c02aa100a198087f46",
-  "description": "One exact captured row from the live-token-validated reference. Float32 storage is an exact widening of BF16."
-}
