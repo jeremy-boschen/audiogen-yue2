@@ -10,6 +10,7 @@
     bin/microscope.py annotate RUN --step 4 --predicted vocal_present=true
     bin/microscope.py annotate RUN --phrase verse.1.2 good
     bin/microscope.py noise-seeds RUN --seeds 1,2,3,4          same tokens, different acoustic noise
+    bin/microscope.py noise-variants RUN --variants same,flip,reverse   the take's own noise, transformed
     bin/microscope.py envelopes RUN                           phase-insensitive similarity, every audio set
     bin/microscope.py bands RUN                               per-band correlation with the final, per step
     bin/microscope.py page RUN                                (re)write RUN/index.html, the listening page
@@ -350,6 +351,55 @@ def cmd_noise_seeds(args):
     return 0
 
 
+NOISE_VARIANTS = {
+    "same": lambda n: n.clone(),          # the control: must reproduce the take exactly
+    "flip": lambda n: -n,                 # every value's sign inverted
+    "reverse": lambda n: n.flip(0),       # the frames in reverse time order
+    "flip-reverse": lambda n: -n.flip(0),
+}
+
+
+def cmd_noise_variants(args):
+    """Hold tokens and plan fixed; solve from a transform of the take's own noise.
+
+    The noise is the engine's own draw (yue2.nar.song_noise, the take's seed and
+    length), transformed and supplied back through synthesize(noise=). "same"
+    supplies it untransformed and must reproduce the take's PCM hash; a variant
+    run without it proves nothing about the supplied-noise path.
+    """
+    from yue2.nar import song_noise
+    from yue2.pipeline import SemanticResult
+    run = pathlib.Path(args.run).expanduser().resolve()
+    plan, tokens = load_take(run)
+    song, _ = song_for_run(run, args.models)
+    pipe = renderer.build_pipeline(pathlib.Path(args.models), song, progress=not args.quiet)
+    final = decoded_pcm(run / "final" / "audio.wav")
+    take_pcm = json.loads((run / "baseline" / "hashes.json").read_text())["pcm"]["hash"]
+    base = song_noise(plan.request.seed, len(tokens))
+    out = run / "noise_variants"
+    rows = []
+    for name in args.variants.split(","):
+        noise = NOISE_VARIANTS[name](base)
+        latents, audio = synthesize_decode(pipe, SemanticResult(plan, tokens, {}, False), noise=noise)
+        scope.write_wav(out / f"{name}.wav", audio, RATE)
+        scope.write_wav(out / "listening" / f"{name}.wav", scope.listening_copy(audio), RATE, subtype="PCM_16")
+        np.save(out / f"{name}.latent.npy", latents)
+        row = {"variant": name, "latent_hash": hashes.hash_array(latents), "pcm_hash": hashes.hash_array(audio),
+               **scope.audio_metrics(audio, final, RATE), **scope.envelope_similarity(audio, final, RATE),
+               "bands": scope.band_correlations(audio, final, RATE)}
+        if name == "same":
+            row["reproduces_take"] = row["pcm_hash"] == take_pcm
+            if not row["reproduces_take"]:
+                raise SystemExit(f"supplied noise did not reproduce the take ({row['pcm_hash']} vs {take_pcm})")
+        rows.append(row)
+        print(f"  {name:<13} corr {row['correlation_final']:+.4f}  env {row['envelope']:.3f}  bands "
+              + " ".join(f"{k}={v:+.3f}" for k, v in row["bands"].items()))
+    scope.write_json(out / "analysis.json", {
+        "note": "semantic tokens and plan fixed; the take's own noise, transformed",
+        "seed": plan.request.seed, "semantic_hash": hashes.hash_tokens(tokens), "take_pcm": take_pcm, "rows": rows})
+    return 0
+
+
 def cmd_envelopes(args):
     """Phase-insensitive similarity to the final for every audio set a run holds.
 
@@ -364,6 +414,7 @@ def cmd_envelopes(args):
             ("flow_predicted", sorted((run / "flow_predicted_audio_raw" / "chunk_000").glob("step_*.wav"))),
             ("ode_steps", sorted((run / "ode_steps").glob("steps_*.wav"))),
             ("noise_seeds", sorted((run / "noise_seeds").glob("noise_s*.wav"))),
+            ("noise_variants", sorted((run / "noise_variants").glob("*.wav"))),
             ("prefixes", sorted((run / "semantic" / "prefix_audio").glob("*.wav")))]
     for name, files in sets:
         if not files:
@@ -562,6 +613,11 @@ def main():
     c.add_argument("--import", dest="import_file", help="JSON exported by the run's index.html")
     c.add_argument("values", nargs="*", help="key=true|false|null, or free text for --phrase")
     c.set_defaults(fn=cmd_annotate)
+
+    c = sub.add_parser("noise-variants", parents=[common])
+    c.add_argument("run")
+    c.add_argument("--variants", default="same,flip,reverse", help=",".join(NOISE_VARIANTS))
+    c.set_defaults(fn=cmd_noise_variants)
 
     c = sub.add_parser("noise-seeds", parents=[common])
     c.add_argument("run")

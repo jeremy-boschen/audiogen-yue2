@@ -55,3 +55,16 @@ Fixture: Burn It Down, seed 777, 200 s, `bin/microscope.py capture` in `.venv-de
   captured from studio take #233's own bundle with `--plan-from`: semantic
   03afb4c03992cbe5 and latent ea116c64d81f212e equal the bundle's, and the decoded FLAC
   samples are identical (4456320 frames). It ends on its own end token (2322 tokens, 92.84 s).
+
+## 2026-09-26 — the take's own noise, transformed (Slow Down take 2)
+
+`bin/microscope.py noise-variants`, engine b576b12 (`synthesize(noise=)`). Signal stats
+against the take; not listening results.
+
+- **same** (untransformed, supplied back): pcm 0f1c1ac604941d18 = the take. The supplied-noise
+  path changes nothing by itself.
+- **flip** (every sign inverted): waveform corr -0.505 (low-mid -0.75, mid -0.65), envelope
+  0.924. Much of the fine waveform follows the noise's sign: flipping the noise largely flips
+  the output's polarity, which the ear does not hear as a difference.
+- **reverse** (frames in reverse time order): waveform corr +0.08, like an unrelated noise
+  draw; envelope 0.939.
