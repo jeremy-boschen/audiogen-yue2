@@ -1,0 +1,33 @@
+# Done
+
+Measurements and what they ruled out. Git log has the what; this keeps the numbers.
+
+## 2026-09-26 — generation microscope, first milestone
+
+Fixture: Burn It Down, seed 777, 200 s, `bin/microscope.py capture` in `.venv-dev`
+(the lockfile's packages, engine editable from ../YuE). Runs under
+`../audiogen/output/microscope-runs/`.
+
+- **Observation is inert.** Pinned engine (7ba7e09), new engine with no observer, and full
+  capture (33 states + velocities copied to host every step, all decoded afterwards):
+  abc f635635350e6971c, semantic 13949b457fa5bbef, latent e04c2e81c24fd269,
+  pcm fb52a658072eebc4, decoded FLAC samples identical. 5000 tokens, so both MPS gates
+  (1024, 4096) crossed. The last ODE state equals the returned latent; decoding it
+  reproduces the PCM hash.
+- **ComfyUI canary** rebuilt from audiogen-comfyui 66c768b: both steps bit-identical.
+- **ABC:** tempo/meter/unit in the first 50 tokens, key by 100; the score is then written
+  strictly left to right (vocal notes 4% / 26% / 66% / 100% at 400 / 800 / 1600 / 2607 tokens).
+- **ODE, predicted final vs finished take** (waveform corr): 0.38 step 0, 0.83 step 4,
+  0.92 step 8. Per band: bass >0.93 by step 4, mids 0.91 by 12, >2.5 kHz 0.95 by 24.
+  Envelope (phase-insensitive): 0.89 at step 0, 0.97 at step 8.
+- **Same tokens, other noise** (4 seeds): waveform corr -0.03..0.11 but envelope 0.960;
+  other seeds' takes score 0.38-0.46. Noise changes phase and detail, not what plays when.
+  Ruled out: reading waveform correlation as musical sameness.
+- **N-step solves:** 12-64 steps land within 0.4% of the 32-step waveform (corr >= 0.996);
+  1 step 0.74; 48 and 64 steps are further from 32 than 24 is.
+- **Semantic prefixes** render the same span of the take (envelope 0.97-0.998) but not
+  identically. CPU noise draws are prefix-stable (verified), so noise is ruled out.
+- **Envelope metric bug:** 2 of 48 log bands held no FFT bin and inflated every
+  correlation (noise seeds read 0.987, pure noise's low band 0.94). Fixed by dropping them.
+- **Seed study (8 seeds):** seed 777 reproduces the baseline exactly. Every seed plans
+  220-282 s of score against a 200 s budget; all are truncated.
