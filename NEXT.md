@@ -35,6 +35,16 @@ Open work only. Each item has a checkable "done when"; finished items move to DO
 
 ## Research (banked)
 
+- **Effect knobs on a finished take (Soundroom).** Latent channels behave like character
+  effects when nudged before decoding (`bin/latent_mixer.py`, `bin/latent_atlas.py`,
+  `bin/latent_probe.py`): e.g. ch0 band-pass + distortion + narrower stereo ("old radio" by
+  ear), ch1 raises the noise floor ("grain"), ch55 air/brightness, ch34 body, ch15 presence,
+  ch26 stereo spread (+26 dB left-to-right leak, wider on decorrelated noise). A take-level
+  Sound panel: named knobs, live looped preview with A/B, "keep" decodes the whole take with
+  the settings as a new version (original untouched, settings stored with it). Before building:
+  confirm the map on a second and third song, and set each knob's safe range from the probe.
+  Done when: the map is confirmed across songs and the user has chosen the knob set.
+
 - **Start a take from another song's sound (next test after the probe kit).** The VAE ships
   its encoder (`modeling_vae.py` `encode`, `encoder.*` weights in YuE2-Vae), so any recording
   can become a latent. Encode a known song (Cannons, in `~/Music/YouTube Downloads/Mosac`),
