@@ -100,3 +100,12 @@ Slow Down take 2, excerpt-based. Signal statistics unless marked "by ear".
   within 0.28 s). Decoding in 1 s pieces with 0.64 s of context each side matches a whole-take
   decode to -122 dB (float rounding); 4 s pieces with that context are bit-identical; no context
   gives -18 dB of error at the joins. A streaming mixer would hear the same audio, sooner.
+
+## Legacy decoder vs default on the same latent (2026-09-26)
+
+Slow Down take 2's final latent was decoded by YuE2-Vae and YuE2-Vae-legacy (sha256 b6d28362…, `models/YuE2-Vae-legacy` symlink). The default decode is bit-identical to the take.
+- Level: −16.0 vs −16.1 dB. Centroid: 311 vs 314 Hz.
+- Band correlation: bass, low-mid and mid 1.00; presence 0.77; air 0.30.
+- The difference is −21.5 dB relative to the signal.
+
+The tone, including the `/` tilt, comes from the latent. The two decoders differ only in fine detail above ~4 kHz. A/B page: RUN/on-cpu/decoders/index.html.
