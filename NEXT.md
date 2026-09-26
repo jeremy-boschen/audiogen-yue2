@@ -33,6 +33,15 @@ Open work only. Each item has a checkable "done when"; finished items move to DO
 - **Microscope runs in the Soundroom.** The studio lists only takes it rendered; runs are
   opened as local pages. Done when: the user decides whether they belong there.
 
+## Research (banked)
+
+- **Tone tilt on a finished take.** A post-decode EQ (tilt / high shelf / low cut) applied to
+  a take without re-rendering, so the same performance can lean `/` (warm) or `\` (bright).
+  Plain mixing, not the model; the question is whether it belongs in the Soundroom as a
+  per-take control, and whether it is offered before or after the latent-direction idea
+  (nudging the finished latent along a learned "brightness" direction before decoding).
+  Done when: the user has heard an A/B of one take tilted both ways and decided.
+
 ## Open questions
 
 - Is waveform correlation of the predicted final (0.83 at step 4) matched by ear? Signal
