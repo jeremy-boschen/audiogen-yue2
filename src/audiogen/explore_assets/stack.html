@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The stack · Microscope</title>
+<link rel="stylesheet" href="explore.css">
+</head>
+<body>
+<div class="stage" id="stage"><div class="vignette"></div></div>
+
+<div class="hero">
+  <div class="kicker">Generation microscope · one take, four layers</div>
+  <h1>The stack</h1>
+  <p>What the model wrote at each level, on one time axis: the <em>score</em> it planned, the <em>semantic tokens</em>
+     it sampled (25 per second), the <em>acoustic latent</em> the ODE solved, and the <em>audio</em> that came out.
+     Hover anywhere to light the same moment through every layer; click to hear that phrase.</p>
+</div>
+
+<aside class="panel right" id="panel">
+  <h3>This moment <small id="beamtime"></small></h3>
+  <div id="moment" class="note">Hover the layers.</div>
+
+  <h3>Generation replay <small>real clock from the run</small></h3>
+  <div class="row">
+    <button class="btn round primary" id="replay" title="Replay generation (P)">▶</button>
+    <div style="flex:1">
+      <div style="font:600 13px ui-monospace,monospace" id="clock">–</div>
+      <div class="note" id="phase">The finished take. Press <kbd>P</kbd> to replay how it was written.</div>
+    </div>
+  </div>
+  <input type="range" id="gen" min="0" max="1000" value="1000" style="margin-top:8px">
+
+  <h3>Phrases <small id="phrasecount"></small></h3>
+  <div class="list" id="phrases"></div>
+
+  <div class="honest"><b>Score time is not audio time.</b> Phrase starts come from the ABC score's tempo, so they are
+    where the plan puts a phrase; the audio usually lands close, but nothing guarantees it. Notes/syllable is a count from
+    the score against a vowel-group syllable estimate, not a judgment of how it sings.</div>
+  <div class="note" id="datanote" style="margin-top:8px"></div>
+</aside>
+
+<div class="keys"><kbd>space</kbd>play / stop phrase · <kbd>←</kbd><kbd>→</kbd>previous / next phrase · <kbd>P</kbd>replay generation ·
+  <kbd>R</kbd>reset camera · drag to orbit, scroll to zoom</div>
+
+<script src="vendor/three/three.bundle.js"></script>
+<script src="data/stack.js"></script>
+<script src="app/common.js"></script>
+<script src="app/stack.js"></script>
+</body>
+</html>

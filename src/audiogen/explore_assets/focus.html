@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Coming into focus · Microscope</title>
+<link rel="stylesheet" href="explore.css">
+</head>
+<body>
+<div class="stage" id="stage"><div class="vignette"></div></div>
+
+<div class="hero">
+  <div class="kicker">Generation microscope · acoustic ODE</div>
+  <h1>Coming into focus</h1>
+  <p>The whole song as a spectrogram landscape (time → right, pitch region → back, energy ↑), re-drawn at every step of the
+     32-step solve. Drag the ring or press <kbd>←</kbd><kbd>→</kbd> and watch <em>noise become the take</em>.
+     Grey, glittering bands have not yet settled toward the finished take; saturated bands have.</p>
+</div>
+
+<aside class="panel right" id="panel">
+  <h3>ODE step <small id="tlabel"></small></h3>
+  <div class="ringwrap">
+    <svg class="ring" id="ring" viewBox="0 0 150 150"></svg>
+    <div class="stepinfo">
+      <div class="big" id="stepbig">0</div>
+      <div class="sub" id="stepsub"></div>
+      <div class="row" style="margin-top:10px">
+        <button class="btn round primary" id="play" title="Play / pause (space)">▶</button>
+        <button class="btn" id="resolve" title="Animate the solve (A)">Resolve <kbd>A</kbd></button>
+      </div>
+    </div>
+  </div>
+  <input type="range" id="slider" min="0" max="32" step="1" value="0" style="margin-top:8px">
+
+  <h3>View &amp; listen <small>switches without restarting</small></h3>
+  <div class="seg" id="modes">
+    <button data-mode="0">State <kbd>1</kbd></button>
+    <button data-mode="1">Predicted final <kbd>2</kbd></button>
+    <button data-mode="2">Finished <kbd>3</kbd></button>
+  </div>
+  <div class="row" style="margin-top:8px">
+    <button class="btn" id="ghost">Ghost overlay <kbd>G</kbd></button>
+    <button class="btn" id="settlebtn">Settling colour <kbd>C</kbd></button>
+  </div>
+  <div class="note" id="modenote" style="margin-top:8px"></div>
+
+  <h3>This step, as signal <small>not listening results</small></h3>
+  <div id="metrics"></div>
+
+  <h3>Waveform correlation by band <small>bands.json</small></h3>
+  <div class="bars" id="bands"></div>
+
+  <h3>Band settling map <small>click to jump</small></h3>
+  <canvas id="settlemap" style="width:100%;height:150px;display:block;cursor:pointer;border-radius:8px"></canvas>
+  <div class="note" style="margin-top:6px">Rows are frequency bands (low at bottom), columns are ODE steps. Brightness is the
+    correlation over time of that band's energy envelope with the finished take's. Ticks mark the first step from which it stays ≥ 0.9.</div>
+
+  <div class="honest"><b>Signal statistics, not listening results.</b> Every number and colour here is computed from the decoded
+    audio of one take (seed 777): correlations with the finished take, envelope energy. They locate where the signal changes;
+    whether you can hear a vocal, a beat or words at a step is a listening question this page does not answer.</div>
+  <div class="note" id="datanote" style="margin-top:8px"></div>
+</aside>
+
+<div class="panel dock" id="dock">
+  <div class="time" id="time">0:00.0 / 3:20</div>
+  <div class="scrub" id="scrub"><canvas id="scrubcanvas"></canvas></div>
+</div>
+
+<div class="keys"><kbd>space</kbd>play · <kbd>←</kbd><kbd>→</kbd>step · <kbd>1</kbd><kbd>2</kbd><kbd>3</kbd>view · <kbd>G</kbd>ghost ·
+  <kbd>A</kbd>resolve · <kbd>,</kbd><kbd>.</kbd>seek 5 s · <kbd>R</kbd>reset camera · drag to orbit, scroll to zoom, click the land to seek</div>
+
+<script src="vendor/three/three.bundle.js"></script>
+<script src="data/focus.js"></script>
+<script src="app/common.js"></script>
+<script src="app/focus.js"></script>
+</body>
+</html>
