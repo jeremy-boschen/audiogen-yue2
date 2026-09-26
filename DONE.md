@@ -68,3 +68,25 @@ against the take; not listening results.
   the output's polarity, which the ear does not hear as a difference.
 - **reverse** (frames in reverse time order): waveform corr +0.08, like an unrelated noise
   draw; envelope 0.939.
+
+## 2026-09-26 — the latent's channels as effects; starting from another song
+
+Slow Down take 2, excerpt-based. Signal statistics unless marked "by ear".
+
+- **Latent channels act like character effects** when nudged before decoding
+  (`latent_mixer`, `latent_atlas`, `latent_probe`, `latent_freqmap`). By ear: ch0 "old radio",
+  ch26 stereo separation. Measured: ch0 band-pass + distortion +4 dB + narrower stereo;
+  ch1 noise +4 dB; ch15 L/R correlation +/-0.70 (width); ch26 hard-left tone leaks +26 dB
+  (spread); ch34 decay +509/-282 ms, crest -5/+5 dB, big 300 Hz-3 kHz swing; ch38 noise
+  +14 dB; ch55 up to +19/-30 dB above 8 kHz. No channel moves pitch (0 cents, all 64).
+- **56 of 64 channels change a pure tone by < 3 dB at every pitch** 50 Hz-10 kHz; the latent's
+  variance is spread thinly (first principal direction 4.8%, 16 directions 39%). The quiet
+  channels look like distributed detail, not hidden register-specific knobs.
+- **Decoder first-layer weights predict impact:** rank correlation 0.63 with the measured
+  impact; same top five (34, 55, 15, 22, 26). They say how much, not what.
+- **EQ atlas on a song mistakes width for EQ:** it measures the mono sum, so ch15's width
+  change read as "presence" there; on the mono sweep its EQ change is small.
+- **Starting the solve from another song** (Cannons, Bad Dream, blended with the take's noise
+  at round k): envelope vs take 0.90 / 0.60 / 0.33 at rounds 8 / 16 / 24, vs Bad Dream
+  0.33 / 0.71 / 0.91. By ear: "doesn't do as much as I thought, and eventually just turns
+  into Bad Dream". The blend carries content, not just sound.
