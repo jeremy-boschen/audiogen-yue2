@@ -221,7 +221,9 @@ def write_capture(run: Path, pipe, take, recorder: Recorder, *, rate: int) -> di
     plan_ids = list(take.result.semantic.plan.abc_ids)
     observed_abc = recorder.tokens.get("abc", [])
     # The end token is reported to on_token but is not part of abc_ids.
-    report["integrity"]["abc_stream_matches"] = observed_abc[:len(plan_ids)] == plan_ids
+    # A supplied score or a held plan generates no ABC tokens: nothing to check.
+    report["integrity"]["abc_stream_matches"] = (observed_abc[:len(plan_ids)] == plan_ids
+                                                 if observed_abc else None)
     report["integrity"]["abc_observed"] = len(observed_abc)
     semantic = list(take.semantic)
     observed_semantic = [t - CODEC_OFFSET for t in recorder.tokens.get("semantic", [])]

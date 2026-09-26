@@ -217,19 +217,23 @@ def request_for(song: Song, step: Step):
 
 
 def render_step(pipe, song: Song, step: Step, previous: Take | None = None, *,
-                on_token=None, on_step=None) -> Take:
+                on_token=None, on_step=None, plan=None) -> Take:
     """Render one step, carrying from `previous` when the step asks for it.
 
     ``on_token`` and ``on_step`` are the engine's own observers, passed through
     untouched: token callbacks for both sampled stages, and every acoustic ODE
     state (see audiogen.microscope). Left as None, nothing is observed.
+
+    ``plan`` skips planning and uses that exact SymbolicPlan: its ABC token IDs
+    as generated, which a score supplied as text does not reproduce.
     """
     clock = time.perf_counter()
     stages: dict = {}
     carried: dict = {}
 
-    plan = pipe.plan(request=request_for(song, step), abc_sampling=song.abc_sampling or None,
-                     on_token=on_token)
+    if plan is None:
+        plan = pipe.plan(request=request_for(song, step), abc_sampling=song.abc_sampling or None,
+                         on_token=on_token)
     stages["abc"] = {"hash": hashes.hash_tokens(plan.abc_ids), "tokens": len(plan.abc_ids),
                      "prefix_tokens": len(plan.prefix)}
 

@@ -196,6 +196,10 @@ def test_render_step_passes_observers_only_when_given(monkeypatch):
     observer = object()
     render.render_step(Pipe(), song, step, on_token=print, on_step=observer)
     assert calls["synth"][1]["on_step"] is observer and calls["semantic"]["on_token"] is print
+    calls.pop("plan")
+    held = SimpleNamespace(abc_ids=[9], prefix=[9], abc="", timing={}, request=None)
+    take = render.render_step(Pipe(), song, step, plan=held)
+    assert "plan" not in calls and take.stages["abc"]["tokens"] == 1
 
 
 def test_band_correlation_separates_frequencies():

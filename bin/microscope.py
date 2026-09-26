@@ -115,7 +115,15 @@ def cmd_capture(args):
         if observe else None
     started = time.strftime("%Y-%m-%dT%H:%M:%S")
     pipe = renderer.build_pipeline(pathlib.Path(args.models), song, progress=not args.quiet)
-    take = renderer.render_step(pipe, song, step,
+    held = None
+    if args.plan_from:
+        # The exact generated plan of another run, re-seeded: seed is not part of
+        # the token prefix, so the conditioning is identical and only sampling moves.
+        from yue2.pipeline import SymbolicPlan
+        held = SymbolicPlan.load(pathlib.Path(args.plan_from).expanduser() / "take")
+        held = dataclasses.replace(held, request=dataclasses.replace(
+            held.request, seed=step.seed, id=renderer.request_id(song, step)))
+    take = renderer.render_step(pipe, song, step, plan=held,
                                 on_token=recorder.on_token if observe else None,
                                 on_step=recorder.on_step if observe else None)
     take.write(run / "take")
@@ -453,18 +461,21 @@ def cmd_study(args):
     extra += ["--no-listening"] if capture.get("no_listening") else []
     extra += ["--quiet"] if args.quiet else []
     if kind in ("seed", "fixed_abc"):
-        score = None
+        plan_from = None
         if kind == "fixed_abc":
-            score = pathlib.Path(manifest["score_from"]).expanduser() / "take" / "score.abc"
-            if not score.exists():
-                raise SystemExit(f"{score} missing")
+            # Held as the exact plan tokens. Supplying score.abc as text is not the
+            # same score: the request strips its trailing newline, which changes the
+            # last ABC token and, with it, the whole take.
+            plan_from = pathlib.Path(manifest["score_from"]).expanduser()
+            if not (plan_from / "take" / "plan_manifest.json").exists():
+                raise SystemExit(f"{plan_from} has no saved plan")
         for seed in manifest["seeds"]:
             run = out / f"{manifest['song']}.{kind}.s{seed}"
             if (run / "metadata.json").exists():
                 print(f"  have {run.name}")
                 continue
             cmd = base + ["capture", manifest["song"], "--run", str(run), "--seed", str(seed)] + extra
-            cmd += ["--score", str(score)] if score else []
+            cmd += ["--plan-from", str(plan_from)] if plan_from else []
             print("  $", " ".join(cmd))
             subprocess.run(cmd, check=True)
     elif kind == "fixed_semantic":
@@ -515,7 +526,8 @@ def main():
     c.add_argument("--run", required=True, help="new, empty run directory")
     c.add_argument("--step")
     c.add_argument("--seed", type=int)
-    c.add_argument("--score", help="supply this ABC instead of planning one")
+    c.add_argument("--score", help="supply this ABC text instead of planning one (re-tokenised)")
+    c.add_argument("--plan-from", help="hold another run's exact plan tokens; only the seed changes")
     c.add_argument("--seconds", type=float)
     c.add_argument("--label")
     c.add_argument("--profile", choices=("official", "comfyui-yue2-mps-v1"))

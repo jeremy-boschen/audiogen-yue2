@@ -16,15 +16,19 @@ Open work only. Each item has a checkable "done when"; finished items move to DO
   `index.html` checklist. Done when: `analysis/timeline.md` of
   `20260926-burn_it_down-s777-baseline/on-cpu` has vocal_present, vocal_melody_recognizable
   and words_intelligible filled for both the ODE state and the predicted final.
-- **Fixed-ABC study** (running). Done when: `fixed_abc-summary.json` exists and seed 777's
-  run has the baseline's semantic hash (or the difference is explained: a supplied score is
-  re-tokenised, a planned one is not).
+- **Fixed-ABC study** (running, holding the baseline's exact plan tokens). Done when:
+  `fixed_abc-summary.json` exists and seed 777's run has the baseline's semantic hash.
 
 ## Soon
 
 - **Burn It Down's budget truncates every seed.** All 8 seeds plan 220-282 s of score
   against a 200 s budget. Done when: the user decides the budget, and a seed-study rerun
   has every take end on the model's own end token (`semantic tokens < max_tokens`).
+- **A supplied score is not the planned score.** `request_for` strips the score text, which
+  drops the planned score's trailing newline and changes its last ABC token (2607 ids, first
+  difference at 2606); from seed 777 that gives a different take (semantic f501d690 vs
+  13949b45). Changing the strip alters every existing song with a supplied score.abc, so it
+  is the user's call. Done when: decided, and if changed, cheap_arcade re-renders are checked.
 - **Chorus phrases do not pair with lyric lines.** Score-line and rest-gap segmentation both
   miss the chorus shape (hooks repeat within a line). Done when: a syllable-to-note
   alignment pairs the choruses of the baseline, Sunday Kitchen and Slow Down, or reports why not.
