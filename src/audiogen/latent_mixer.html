@@ -36,8 +36,11 @@ main { padding:16px 20px 40px; display:grid; grid-template-columns:repeat(auto-f
     <button id="play">▶ Play</button>
     <button id="ab" title="B">A/B: hearing edited</button>
     <label>Excerpt <input id="start" type="range" min="0" max="80" step="0.5" value="30"> <span id="startv"></span></label>
+    <label>Hold <select id="freeze"><option value="">off (the song plays)</option><option value="moment">one moment, as a tone</option><option value="average">the song's average, as a tone</option></select></label>
+    <label id="momentl" hidden>Moment <input id="moment" type="range" min="0" max="80" step="0.04" value="30"> <span id="momentv"></span></label>
     <label>Length <select id="len"><option>5</option><option selected>10</option><option>20</option></select> s</label>
     <label>All channels' gain <input id="master" type="range" min="0" max="2" step="0.05" value="1"> <span id="masterv">1.00</span></label>
+    <label>Volume <input id="vol" type="range" min="0" max="1" step="0.01" value="0.4"></label>
     <button id="reset">Reset all</button>
     <button id="snap">Snapshot</button>
     <span id="busy" title="decoding"></span><span id="msg" style="color:var(--muted);font-size:12px"></span>
@@ -50,6 +53,7 @@ main { padding:16px 20px 40px; display:grid; grid-template-columns:repeat(auto-f
 const $ = (id) => document.getElementById(id);
 const N = 64;
 const edits = { offset: Array(N).fill(0), gain: Array(N).fill(1), mute: Array(N).fill(false), solo: Array(N).fill(false), master_gain: 1 };
+let out = null;                         // listening volume only; never changes what is decoded
 let info, ctx, playing = false, bypass = false, cur = null, inflight = false, dirty = { edited: true, original: true };
 const buffers = { edited: null, original: null }, stats = { edited: null, original: null };
 
@@ -59,7 +63,8 @@ function swap(buffer) {
   if (!playing || !buffer) return;
   const at = cur ? position() % buffer.duration : 0;
   const src = ctx.createBufferSource(), gain = ctx.createGain();
-  src.buffer = buffer; src.loop = true; src.connect(gain).connect(ctx.destination);
+  if (!out) { out = ctx.createGain(); out.gain.value = +$('vol').value; out.connect(ctx.destination); }
+  src.buffer = buffer; src.loop = true; src.connect(gain).connect(out);
   const now = ctx.currentTime;
   gain.gain.setValueAtTime(0, now); gain.gain.linearRampToValueAtTime(1, now + 0.04);
   src.start(now, at);
@@ -70,7 +75,8 @@ function heard() { return bypass ? buffers.original : buffers.edited; }
 
 // --- decoding: newest settings win, one request in flight -------------------------------
 function request(which) {
-  const body = { start: +$('start').value, seconds: +$('len').value, bypass: which === 'original', edits };
+  const body = { start: +$('start').value, seconds: +$('len').value, bypass: which === 'original', edits,
+                 freeze: $('freeze').value || null, moment: +$('moment').value };
   return fetch('/api/decode', { method: 'POST', body: JSON.stringify(body) }).then(async (r) => {
     if (!r.ok) throw new Error(await r.text());
     const s = JSON.parse(r.headers.get('X-Stats'));
@@ -133,6 +139,9 @@ $('play').onclick = async () => {
 $('ab').onclick = () => { bypass = !bypass; $('ab').classList.toggle('on', bypass); $('ab').textContent = bypass ? 'A/B: hearing original' : 'A/B: hearing edited'; swap(heard()); };
 $('start').oninput = () => { $('startv').textContent = fmt(+$('start').value); changed(true); };
 $('len').onchange = () => changed(true);
+$('vol').oninput = () => { if (out) out.gain.value = +$('vol').value; };
+$('freeze').onchange = () => { $('momentl').hidden = $('freeze').value !== 'moment'; changed(true); };
+$('moment').oninput = () => { $('momentv').textContent = (+$('moment').value).toFixed(2) + ' s'; changed(true); };
 $('master').oninput = () => { edits.master_gain = +$('master').value; $('masterv').textContent = (+$('master').value).toFixed(2); changed(); };
 $('master').ondblclick = () => { $('master').value = 1; $('master').oninput(); };
 $('reset').onclick = () => {
@@ -143,7 +152,7 @@ $('reset').onclick = () => {
   $('master').value = 1; $('masterv').textContent = '1.00'; changed();
 };
 $('snap').onclick = async () => {
-  const r = await fetch('/api/snapshot', { method: 'POST', body: JSON.stringify({ start: +$('start').value, seconds: +$('len').value, edits }) });
+  const r = await fetch('/api/snapshot', { method: 'POST', body: JSON.stringify({ start: +$('start').value, seconds: +$('len').value, edits, freeze: $('freeze').value || null, moment: +$('moment').value }) });
   $('msg').textContent = r.ok ? 'saved ' + (await r.json()).saved.split('/').slice(-3).join('/') : await r.text();
 };
 addEventListener('keydown', (e) => {
@@ -154,6 +163,7 @@ addEventListener('keydown', (e) => {
 fetch('/api/info').then((r) => r.json()).then((d) => {
   info = d; $('runname').textContent = '· ' + d.run;
   $('start').max = Math.max(0, d.seconds - 5); $('startv').textContent = fmt(+$('start').value);
+  $('moment').max = d.seconds - 0.04; $('momentv').textContent = (+$('moment').value).toFixed(2) + ' s';
   for (let i = 0; i < N; i++) $('grid').append(strip(i));
   ctx = new AudioContext(); pump();
 });

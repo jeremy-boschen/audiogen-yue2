@@ -56,6 +56,14 @@ class Mixer:
     def decode(self, body: dict) -> tuple[np.ndarray, dict]:
         span = self.excerpt(float(body.get("start", 0)), float(body.get("seconds", 10)))
         part = self.latent[span]
+        # A held tone: one frame (or the take's average frame) repeated for the whole loop,
+        # so an edit changes one steady sound instead of a moving mix.
+        freeze = body.get("freeze")
+        if freeze == "moment":
+            at = max(0, min(len(self.latent) - 1, round(float(body.get("moment", body.get("start", 0))) * 25)))
+            part = np.repeat(self.latent[at:at + 1], span.stop - span.start, axis=0)
+        elif freeze == "average":
+            part = np.repeat(self.whole["mean"][None, :].astype(np.float32), span.stop - span.start, axis=0)
         edited = part if body.get("bypass") else mixer.apply(part, body.get("edits") or mixer.neutral(), self.whole)
         with self.lock:
             clock = time.perf_counter()
