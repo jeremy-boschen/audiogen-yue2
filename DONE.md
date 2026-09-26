@@ -109,3 +109,17 @@ Slow Down take 2's final latent was decoded by YuE2-Vae and YuE2-Vae-legacy (sha
 - The difference is −21.5 dB relative to the signal.
 
 The tone, including the `/` tilt, comes from the latent. The two decoders differ only in fine detail above ~4 kHz. A/B page: RUN/on-cpu/decoders/index.html.
+
+## Latent knobs across songs, and on the voice vs the band (2026-09-26)
+
+`bin/latent_knobs_across.py` measured all 64 channels on five songs: Slow Down take 2 (the reference), Burn It Down s777 and Sunday Kitchen s2026 (model latents), and Coast Road and Expensive Habit (album keepers put through the encoder). Each knob was pushed ±2 of that song's own spread.
+- Agreement of each knob's EQ curve with the reference: median 0.93 over all 64 channels, 0.95 over the 18 that move ≥1 dB, and none of those 18 below 0.7. Strength is 0.8–1.7× the reference's.
+- Width goes the same way on every song: ch15 −4 to −7 dB, ch26 +7 to +10 dB.
+- The one weak spot is ch38 up on Sunday Kitchen (0.48).
+- The knobs also work on encoded recordings. Page: output/microscope-runs/00_knobs_across/.
+
+`bin/latent_knobs_sung.py` measured each knob over frames where the score says the voice sings versus frames more than 1 s from any vocal note.
+- Burn It Down (76 s sung / 81 s gaps) and Sunday Kitchen (35 / 22): curves alike 0.97–1.00, with the same size and width change.
+- Slow Down had only 1 s of gaps, too little to count.
+
+As measured, the knobs act on the whole mix, not the voice. The page renders each knob "sung only" and "gaps only" for the ear to confirm: output/microscope-runs/00_knobs_sung/.
