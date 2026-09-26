@@ -95,3 +95,8 @@ Slow Down take 2, excerpt-based. Signal statistics unless marked "by ear".
   strongest are mixes of the single-channel knobs. Now behind `latent_mixer.py --directions`.
 - **Matching one reference's channel statistics** (Bad Dream, 0-150%): by ear "isn't giving us
   much, at least not with only 1 song". Measured at 100%: +6 dB louder, centroid 314 -> 471 Hz.
+- **The decoder's context is about one second.** One latent frame changed (+3 std, all
+  channels) alters the audio from 12 frames before to 12 after (0.48 s each side; >1% of peak
+  within 0.28 s). Decoding in 1 s pieces with 0.64 s of context each side matches a whole-take
+  decode to -122 dB (float rounding); 4 s pieces with that context are bit-identical; no context
+  gives -18 dB of error at the joins. A streaming mixer would hear the same audio, sooner.
