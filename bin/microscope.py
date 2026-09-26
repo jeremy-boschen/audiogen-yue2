@@ -11,6 +11,7 @@
     bin/microscope.py annotate RUN --phrase verse.1.2 good
     bin/microscope.py noise-seeds RUN --seeds 1,2,3,4          same tokens, different acoustic noise
     bin/microscope.py bands RUN                               per-band correlation with the final, per step
+    bin/microscope.py page RUN                                (re)write RUN/index.html, the listening page
     bin/microscope.py timeline RUN                            annotations + metrics -> timeline.{json,md}
     bin/microscope.py study MANIFEST.json                     fixed-ABC / fixed-semantic / seed studies
 
@@ -159,6 +160,8 @@ def cmd_capture(args):
         scope.write_json(run / "analysis" / "capture.json", report)
         (run / "analysis" / "metrics.csv").write_text(scope.metrics_csv(run))
         write_timeline(run)
+        if not args.no_decode and not args.no_listening and list(recorder.flow) == [0]:
+            scope.listening_page(run)
         print("  integrity: " + ", ".join(f"{k}={v}" for k, v in report["integrity"].items()))
 
     metadata["finished"] = time.strftime("%Y-%m-%dT%H:%M:%S")
@@ -357,11 +360,25 @@ def cmd_bands(args):
     return 0
 
 
+def cmd_page(args):
+    run = pathlib.Path(args.run).expanduser().resolve()
+    print(f"file://{scope.listening_page(run)}")
+    return 0
+
+
 def cmd_annotate(args):
     run = pathlib.Path(args.run).expanduser()
     path = run / "analysis" / "annotations.json"
     notes = json.loads(path.read_text())
-    if args.phrase:
+    if args.import_file:
+        # The listening page's export: {"ode": {chunk: {step: {key: bool}}}, "ode_predicted": {...}}
+        incoming = json.loads(pathlib.Path(args.import_file).read_text())
+        for kind in ("ode", "ode_predicted"):
+            for chunk, steps in incoming.get(kind, {}).items():
+                for step, values in steps.items():
+                    target = notes[kind][chunk][str(step)]
+                    target.update({k: v for k, v in values.items() if k in scope.LISTENING})
+    elif args.phrase:
         notes.setdefault("phrases", {})[args.phrase] = " ".join(args.values)
     else:
         chunk = notes["ode_predicted" if args.predicted else "ode"][f"chunk_{args.chunk:03d}"][str(args.step)]
@@ -500,7 +517,8 @@ def main():
     c.add_argument("--phrase", help="e.g. verse.1.2 (section label, occurrence, phrase)")
     c.add_argument("--predicted", action="store_true",
                    help="judge the predicted-final audio at --step rather than the ODE state")
-    c.add_argument("values", nargs="+", help="key=true|false|null, or free text for --phrase")
+    c.add_argument("--import", dest="import_file", help="JSON exported by the run's index.html")
+    c.add_argument("values", nargs="*", help="key=true|false|null, or free text for --phrase")
     c.set_defaults(fn=cmd_annotate)
 
     c = sub.add_parser("noise-seeds", parents=[common])
@@ -512,6 +530,10 @@ def main():
     c.add_argument("run")
     c.set_defaults(fn=cmd_bands)
 
+    c = sub.add_parser("page", parents=[common])
+    c.add_argument("run")
+    c.set_defaults(fn=cmd_page)
+
     c = sub.add_parser("timeline", parents=[common])
     c.add_argument("run")
     c.set_defaults(fn=cmd_timeline)
@@ -521,8 +543,8 @@ def main():
     c.set_defaults(fn=cmd_study)
 
     args = ap.parse_args()
-    if args.command == "annotate" and args.step is None and not args.phrase:
-        raise SystemExit("annotate needs --step or --phrase")
+    if args.command == "annotate" and args.step is None and not args.phrase and not args.import_file:
+        raise SystemExit("annotate needs --step, --phrase or --import")
     return args.fn(args)
 
 

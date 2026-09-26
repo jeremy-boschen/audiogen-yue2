@@ -79,6 +79,11 @@ Annotate after listening; the timeline takes the first step judged true:
     bin/microscope.py annotate $R --phrase verse.1.2 "garbled: 'cheapest' sung as 'chee-ee'"
     bin/microscope.py timeline $R
 
+`<run>/index.html` (rewrite with `bin/microscope.py page $R`) steps through the
+ODE with 1/2/3 for state / predicted final / finished take, T to toggle against
+the finished take without restarting playback, B for blind, and a checklist
+whose export `annotate --import` reads.
+
 Metric thresholds in the timeline (correlation with the final, latent cosine)
 locate where things change. They are not listening results.
 

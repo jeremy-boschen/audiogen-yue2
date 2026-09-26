@@ -428,3 +428,104 @@ def band_correlations(audio: np.ndarray, final: np.ndarray, rate: int, bands=BAN
         den = np.sqrt((np.abs(a[sel]) ** 2).sum() * (np.abs(f[sel]) ** 2).sum())
         out[name] = float(num / den) if den else None
     return out
+
+
+PAGE = """<!doctype html><meta charset="utf-8"><title>Microscope · __RUN__</title>
+<style>
+body{font:14px/1.45 -apple-system,system-ui,sans-serif;background:#0f1726;color:#dfe6f3;margin:24px;max-width:1100px}
+h1{font-size:18px;margin:0 0 4px}code,.mono{font-family:ui-monospace,Menlo,monospace;font-size:12px}
+.row{display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin:12px 0}
+button{background:#1d2a44;color:#dfe6f3;border:1px solid #33456b;border-radius:6px;padding:6px 12px;cursor:pointer}
+button.on{background:#3b6ee8;border-color:#3b6ee8}input[type=range]{width:420px}
+table{border-collapse:collapse}td,th{padding:3px 10px;border-bottom:1px solid #22314f;text-align:right}
+th{color:#8fa3c7;font-weight:500}td:first-child,th:first-child{text-align:left}
+.checks label{display:inline-block;width:260px;margin:2px 0}.dim{color:#8fa3c7}
+#which{font-size:22px;font-weight:600;min-width:220px}
+</style>
+<h1>__RUN__</h1><div class="dim mono">__ROUTE__</div>
+<div class="row"><button id="play">Play ␣</button>
+<span>step <b id="stepn">0</b> / __STEPS__</span><input id="step" type="range" min="0" max="__STEPS__" value="0">
+<span class="dim">← → step</span></div>
+<div class="row"><button data-v="state">1 · ODE state</button><button data-v="predicted">2 · predicted final</button>
+<button data-v="final">3 · finished take</button><button id="toggle">T · toggle A/B</button>
+<button id="blind">B · blind</button><span id="which"></span></div>
+<div class="dim">T switches between the step view you picked and the finished take without restarting playback. Blind hides which is playing.</div>
+<h3>Listening checklist — step <span id="stepn2">0</span>, <span id="viewname">ODE state</span></h3>
+<div class="checks" id="checks"></div>
+<div class="row"><button id="copy">Copy annotations JSON</button>
+<span class="dim">then: <code>bin/microscope.py annotate __RUNPATH__ --import FILE</code></span></div>
+<h3>Signal (not a listening result)</h3><table id="metrics"></table>
+<script>
+const DATA=__DATA__, KEYS=__KEYS__, STORE="microscope."+DATA.run;
+const el={}; for(const v of ["state","predicted","final"]){el[v]=new Audio();el[v].preload="auto";el[v].muted=true;}
+el.final.src=DATA.final;
+let step=0, view="state", heard="state", ab=false, blind=false, playing=false;
+const pad=n=>String(n).padStart(DATA.width,"0");
+function load(){const t=el.final.currentTime;
+  el.state.src=`flow_audio_listening/chunk_000/step_${pad(step)}.wav`;
+  el.predicted.src=`flow_predicted_audio_listening/chunk_000/step_${pad(step)}.wav`;
+  for(const v of ["state","predicted"]){el[v].addEventListener("loadedmetadata",()=>{el[v].currentTime=t; if(playing) el[v].play();},{once:true});}
+  document.getElementById("stepn").textContent=step;document.getElementById("stepn2").textContent=step;render();}
+function route(){heard=ab?"final":view;for(const v in el) el[v].muted=(v!==heard);
+  document.getElementById("which").textContent=blind?"● playing":({state:"ODE state",predicted:"predicted final",final:"finished take"})[heard]+(heard!=="final"?` @ step ${step}`:"");
+  document.querySelectorAll("[data-v]").forEach(b=>b.classList.toggle("on",b.dataset.v===view));
+  document.getElementById("viewname").textContent=view==="predicted"?"predicted final":"ODE state";}
+setInterval(()=>{if(!playing)return;const t=el.final.currentTime;for(const v of ["state","predicted"]){const d=el[v].currentTime-t;
+  el[v].playbackRate=Math.abs(d)>0.02?(d>0?0.98:1.02):1;}},250);
+function notes(){return JSON.parse(localStorage.getItem(STORE)||"{}");}
+function render(){const n=notes(),key=(view==="predicted"?"ode_predicted":"ode")+":"+step,cur=n[key]||{};
+  const box=document.getElementById("checks");box.innerHTML="";
+  for(const k of KEYS){const l=document.createElement("label"),c=document.createElement("input");c.type="checkbox";
+    c.checked=cur[k]===true;c.onchange=()=>{const m=notes();m[key]=m[key]||{};m[key][k]=c.checked;localStorage.setItem(STORE,JSON.stringify(m));};
+    l.append(c," "+k.replaceAll("_"," "));box.append(l);}
+  route();}
+document.getElementById("step").oninput=e=>{step=+e.target.value;load();};
+document.querySelectorAll("[data-v]").forEach(b=>b.onclick=()=>{if(b.dataset.v==="final"){ab=true;}else{view=b.dataset.v;ab=false;}render();});
+document.getElementById("toggle").onclick=()=>{ab=!ab;route();};
+document.getElementById("blind").onclick=e=>{blind=!blind;e.target.classList.toggle("on",blind);route();};
+document.getElementById("play").onclick=()=>{playing=!playing;for(const v in el) playing?el[v].play():el[v].pause();};
+document.getElementById("copy").onclick=()=>{const out={ode:{},ode_predicted:{}};
+  for(const [k,v] of Object.entries(notes())){const [kind,s]=k.split(":");(out[kind]["chunk_000"]=out[kind]["chunk_000"]||{})[s]=v;}
+  navigator.clipboard.writeText(JSON.stringify(out,null,1));};
+addEventListener("keydown",e=>{if(e.target.tagName==="INPUT"&&e.target.type!=="range")return;
+  if(e.key===" "){e.preventDefault();document.getElementById("play").click();}
+  if(e.key==="ArrowRight"&&step<DATA.steps){step++;document.getElementById("step").value=step;load();}
+  if(e.key==="ArrowLeft"&&step>0){step--;document.getElementById("step").value=step;load();}
+  if(e.key==="1"){view="state";ab=false;render();} if(e.key==="2"){view="predicted";ab=false;render();}
+  if(e.key==="3"){ab=true;route();} if(e.key==="t"||e.key==="T"){ab=!ab;route();}
+  if(e.key==="b"||e.key==="B")document.getElementById("blind").click();});
+const m=DATA.metrics, cols=Object.keys(m[0]||{});
+document.getElementById("metrics").innerHTML="<tr>"+cols.map(c=>`<th>${c.replaceAll("_"," ")}</th>`).join("")+"</tr>"+
+  m.map(r=>"<tr>"+cols.map(c=>`<td>${r[c]==null?"":typeof r[c]==="number"&&!Number.isInteger(r[c])?r[c].toFixed(3):r[c]}</td>`).join("")+"</tr>").join("");
+load();
+</script>
+"""
+
+
+def listening_page(run: Path) -> Path:
+    """A local page for listening through a single-chunk run step by step."""
+    import html
+    record = json.loads((run / "flow" / "chunk_000" / "metrics.json").read_text())
+    steps = record["steps"]
+    audio = {r["step"]: r for r in record.get("audio", [])}
+    guess = {r["step"]: r for r in record.get("predicted_audio", [])}
+    bands = json.loads((run / "analysis" / "bands.json").read_text()) if (run / "analysis" / "bands.json").exists() else {}
+    guess_bands = bands.get("flow_predicted_audio_raw", {}).get("chunk_000", {})
+    rows = []
+    for r in record["latent"]:
+        s = r["step"]
+        row = {"step": s, "state corr": audio.get(s, {}).get("correlation_final"),
+               "predicted corr": guess.get(s, {}).get("correlation_final")}
+        for name, value in (guess_bands.get(str(s)) or {}).items():
+            row[f"pred {name}"] = value
+        rows.append(row)
+    meta = json.loads((run / "metadata.json").read_text())
+    data = {"run": run.name, "steps": steps, "width": max(2, len(str(steps))),
+            "final": "final/audio.wav", "metrics": rows}
+    page = (PAGE.replace("__RUN__", html.escape(run.name))
+            .replace("__ROUTE__", html.escape(" ".join(meta["invocation"]["argv"])))
+            .replace("__RUNPATH__", html.escape(str(run)))
+            .replace("__STEPS__", str(steps))
+            .replace("__DATA__", json.dumps(data)).replace("__KEYS__", json.dumps(LISTENING)))
+    (run / "index.html").write_text(page)
+    return run / "index.html"
