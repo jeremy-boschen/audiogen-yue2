@@ -231,8 +231,35 @@ def request_for(song: Song, step: Step):
                        seed=step.seed, cot=song.cot, abc=abc, cfg_scale=song.cfg_scale)
 
 
+class Preview:
+    """Asks for "listen to the song so far" while the semantic stage is writing.
+
+    ``wanted()`` is polled every ``every`` tokens; when it returns True the tokens
+    written so far are voiced and decoded, ``deliver(audio, seconds)`` receives the
+    result, and the stage carries on from where it paused. The take is unchanged:
+    sampling draws from its own generator and KV cache, and the model is handed back
+    to the AR stage exactly as the NAR stage found it (tests/test_preview.py).
+    """
+
+    def __init__(self, wanted, deliver, every: int = 25):
+        self.wanted, self.deliver, self.every = wanted, deliver, every
+
+
+def preview_so_far(pipe, plan, tokens: list[int], step: Step, known_latents=None) -> np.ndarray:
+    """Voice and decode ``tokens`` (the song so far), then hand the model back to the AR stage."""
+    from yue2.pipeline import SemanticResult
+    known = None if known_latents is None else np.asarray(known_latents)[:len(tokens)]
+    latents = pipe.synthesize(SemanticResult(plan, list(tokens), {}, False), known_latents=known,
+                              blend_seconds=step.blend_seconds if known is not None else 0.0,
+                              chunk_seconds=step.chunk_seconds, overlap_seconds=step.overlap_seconds)
+    audio = np.asarray(pipe.decode(latents), np.float32)
+    pipe._stage_boundary()
+    pipe._load_model(for_nar=False)          # re-fires on_model_ready for AR: LoRA back to its AR state
+    return audio
+
+
 def render_step(pipe, song: Song, step: Step, previous: Take | None = None, *,
-                on_token=None, on_step=None, plan=None) -> Take:
+                on_token=None, on_step=None, plan=None, preview: Preview | None = None) -> Take:
     """Render one step, carrying from `previous` when the step asks for it.
 
     ``on_token`` and ``on_step`` are the engine's own observers, passed through
@@ -268,7 +295,23 @@ def render_step(pipe, song: Song, step: Step, previous: Take | None = None, *,
                    "latent_hash": hashes.hash_array(known_latents)}
 
     sampling = {**song.semantic_sampling, "max_tokens": step.new_tokens}
-    semantic = pipe.generate_semantic(plan, sampling=sampling, carry=carry_tokens, on_token=on_token)
+    semantic_observer = on_token
+    if preview is not None:
+        if pipe.quantization != "none":
+            raise ValueError("listen-so-far needs quantization 'none': the fp8 AR preparation "
+                             "is not shown to survive a pause for the NAR stage")
+        from yue2.protocol import CODEC_OFFSET, CODEC_SIZE
+        written: list[int] = list(carry_tokens or [])
+
+        def semantic_observer(phase, token):
+            if on_token is not None:
+                on_token(phase, token)
+            value = int(token) - CODEC_OFFSET
+            if 0 <= value < CODEC_SIZE:
+                written.append(value)
+                if len(written) % preview.every == 0 and preview.wanted():
+                    preview.deliver(preview_so_far(pipe, plan, written, step, known_latents), len(written) / 25)
+    semantic = pipe.generate_semantic(plan, sampling=sampling, carry=carry_tokens, on_token=semantic_observer)
     stages["semantic"] = {"hash": hashes.hash_tokens(semantic.tokens),
                           "tokens": len(semantic.tokens),
                           "seconds": round(len(semantic.tokens) / 25, 2)}

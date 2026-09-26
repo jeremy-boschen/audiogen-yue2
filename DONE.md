@@ -136,3 +136,10 @@ As measured, the knobs act on the whole mix, not the voice. The page renders eac
 - The semantic stage is prefix-exact: a short budget writes exactly the take's opening, so the song itself is the same.
 - The sound stage sees the whole song at once (one chunk up to ~440 s), so rendering a prefix alone is a different performance of the same tokens, like a new noise draw.
 - A 10 s preview costs ~13 s and a 30 s preview ~33 s. The ear decides whether it stands in for the take. Page: RUN/on-cpu/preview_prefix/.
+
+## Listen-so-far is bit-identical (2026-09-26)
+
+`render.Preview` voices and decodes the tokens written so far while the semantic stage pauses, then hands the model back to the AR stage.
+- Test: Sunday Kitchen s2026 rendered plain, then with previews at 10 s and 30 s. abc, semantic, latent and pcm hashes were identical to each other and to the original capture (37fdd8d7…, dc2d4c9c…, 10a0fe7c…, b38cb4fa…).
+- The two previews cost 8.3 s together: 114.6 s plain vs 122.9 s with previews.
+- fp8 quantization is refused, because its AR preparation is not shown to survive the pause.
