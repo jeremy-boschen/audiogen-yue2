@@ -90,3 +90,6 @@ Slow Down take 2, excerpt-based. Signal statistics unless marked "by ear".
   at round k): envelope vs take 0.90 / 0.60 / 0.33 at rounds 8 / 16 / 24, vs Bad Dream
   0.33 / 0.71 / 0.91. By ear: "doesn't do as much as I thought, and eventually just turns
   into Bad Dream". The blend carries content, not just sound.
+- **Principal-direction knobs: nothing by ear.** Top 12 directions of 87 takes' latents (59 of
+  them cheap_looks), offered in the mixer: "didn't notice anything that sounded good". The
+  strongest are mixes of the single-channel knobs. Now behind `latent_mixer.py --directions`.

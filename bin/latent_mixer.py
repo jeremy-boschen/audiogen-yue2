@@ -40,7 +40,8 @@ def wav_bytes(audio: np.ndarray) -> bytes:
 
 
 class Mixer:
-    def __init__(self, run: pathlib.Path, models: pathlib.Path, quiet: bool, references: str | None = None):
+    def __init__(self, run: pathlib.Path, models: pathlib.Path, quiet: bool, references: str | None = None,
+                 directions: bool = False):
         import microscope
         self.run = run
         self.latent = np.load(run / "final" / "latent.npy").astype(np.float32)
@@ -48,8 +49,10 @@ class Mixer:
         song, _ = microscope.song_for_run(run, str(models))
         self.pipe = microscope.renderer.build_pipeline(models, song, progress=not quiet)
         self.lock = threading.Lock()          # one decode at a time on the GPU
+        # Principal directions (00_latent_directions/directions.npz) are off by default: by ear
+        # none of the top 12 did anything the single channels do not (2026-09-26).
         found = next((d / "00_latent_directions" / "directions.npz" for d in run.parents
-                      if (d / "00_latent_directions" / "directions.npz").exists()), None)
+                      if (d / "00_latent_directions" / "directions.npz").exists()), None) if directions else None
         self.basis = dict(np.load(found)) if found else None
         self.models = models
         self.references = pathlib.Path(references).expanduser() if references else None
@@ -183,8 +186,9 @@ def main() -> int:
     parser.add_argument("--quiet", action="store_true")
     parser.add_argument("--references", default="~/Music/YouTube Downloads/Mosac",
                         help="a folder of recordings to match the take's sound to")
+    parser.add_argument("--directions", action="store_true", help="offer the principal-direction knobs")
     args = parser.parse_args()
-    state = Mixer(pathlib.Path(args.run).expanduser().resolve(), pathlib.Path(args.models), args.quiet, args.references)
+    state = Mixer(pathlib.Path(args.run).expanduser().resolve(), pathlib.Path(args.models), args.quiet, args.references, args.directions)
     state.decode({"start": 0, "seconds": 2})                 # load the decoder before the first request
     server = ThreadingHTTPServer(("127.0.0.1", args.port), handler_for(state))
     print(f"latent mixer on http://127.0.0.1:{args.port}/", flush=True)
