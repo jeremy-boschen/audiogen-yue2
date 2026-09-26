@@ -529,3 +529,58 @@ def listening_page(run: Path) -> Path:
             .replace("__DATA__", json.dumps(data)).replace("__KEYS__", json.dumps(LISTENING)))
     (run / "index.html").write_text(page)
     return run / "index.html"
+
+
+def envelope(audio: np.ndarray, rate: int, frame: int = 4096, bands: int = 48) -> np.ndarray:
+    """Log-magnitude spectrogram of the mono mix in log-spaced bands, [frames, bands].
+
+    Phase is discarded, so two renders of the same performance with different
+    micro-phase still match; what is left is what plays when, at what pitch
+    region, how loud.
+    """
+    mono = np.asarray(audio, dtype=np.float64)
+    mono = mono.mean(axis=1) if mono.ndim == 2 else mono
+    hop = frame // 2
+    frames = np.lib.stride_tricks.sliding_window_view(mono, frame)[::hop]
+    freqs = np.fft.rfftfreq(frame, 1.0 / rate)
+    edges = np.geomspace(40, min(16000, rate / 2), bands + 1)
+    index = np.digitize(freqs, edges) - 1
+    out = np.zeros((len(frames), bands))
+    window = np.hanning(frame)
+    for start in range(0, len(frames), 512):
+        power = np.abs(np.fft.rfft(frames[start:start + 512] * window, axis=1)) ** 2
+        for b in range(bands):
+            sel = index == b
+            if sel.any():
+                out[start:start + 512, b] = power[:, sel].sum(axis=1)
+    # A log band narrower than one FFT bin holds no bin at all. Left in, it is a
+    # constant in both signals and inflates every correlation, so it is dropped.
+    populated = np.array([(index == b).any() for b in range(bands)])
+    return np.log10(out[:, populated] + 1e-10)
+
+
+def envelope_centres(rate: int, frame: int = 4096, bands: int = 48) -> np.ndarray:
+    """Centre frequency of each band envelope() keeps, in the same order."""
+    freqs = np.fft.rfftfreq(frame, 1.0 / rate)
+    edges = np.geomspace(40, min(16000, rate / 2), bands + 1)
+    index = np.digitize(freqs, edges) - 1
+    centres = np.sqrt(edges[:-1] * edges[1:])
+    return centres[[(index == b).any() for b in range(bands)]]
+
+
+def envelope_similarity(audio: np.ndarray, final: np.ndarray, rate: int) -> dict:
+    """Correlation of spectrogram envelopes: whole, and low (<300 Hz) / mid / high (>3 kHz) bands."""
+    a, f = envelope(audio, rate), envelope(final, rate)
+    n = min(len(a), len(f))
+    a, f = a[:n], f[:n]
+    centres = envelope_centres(rate)
+
+    def corr(x, y):
+        x, y = x - x.mean(), y - y.mean()
+        d = np.sqrt((x * x).sum() * (y * y).sum())
+        return float((x * y).sum() / d) if d else None
+
+    return {"envelope": corr(a, f),
+            "envelope_low": corr(a[:, centres < 300], f[:, centres < 300]),
+            "envelope_mid": corr(a[:, (centres >= 300) & (centres < 3000)], f[:, (centres >= 300) & (centres < 3000)]),
+            "envelope_high": corr(a[:, centres >= 3000], f[:, centres >= 3000])}

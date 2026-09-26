@@ -10,6 +10,7 @@
     bin/microscope.py annotate RUN --step 4 --predicted vocal_present=true
     bin/microscope.py annotate RUN --phrase verse.1.2 good
     bin/microscope.py noise-seeds RUN --seeds 1,2,3,4          same tokens, different acoustic noise
+    bin/microscope.py envelopes RUN                           phase-insensitive similarity, every audio set
     bin/microscope.py bands RUN                               per-band correlation with the final, per step
     bin/microscope.py page RUN                                (re)write RUN/index.html, the listening page
     bin/microscope.py timeline RUN                            annotations + metrics -> timeline.{json,md}
@@ -341,6 +342,36 @@ def cmd_noise_seeds(args):
     return 0
 
 
+def cmd_envelopes(args):
+    """Phase-insensitive similarity to the final for every audio set a run holds.
+
+    Waveform correlation punishes a changed phase as hard as a changed note;
+    this compares log-magnitude spectrogram envelopes instead, so it asks
+    whether the same things play at the same times.
+    """
+    run = pathlib.Path(args.run).expanduser().resolve()
+    final = decoded_pcm(run / "final" / "audio.wav")
+    report = {}
+    sets = [("flow_state", sorted((run / "flow_audio_raw" / "chunk_000").glob("step_*.wav"))),
+            ("flow_predicted", sorted((run / "flow_predicted_audio_raw" / "chunk_000").glob("step_*.wav"))),
+            ("ode_steps", sorted((run / "ode_steps").glob("steps_*.wav"))),
+            ("noise_seeds", sorted((run / "noise_seeds").glob("noise_s*.wav"))),
+            ("prefixes", sorted((run / "semantic" / "prefix_audio").glob("*.wav")))]
+    for name, files in sets:
+        if not files:
+            continue
+        rows = {}
+        for wav in files:
+            audio = decoded_pcm(wav)
+            rows[wav.stem] = scope.envelope_similarity(audio, final[:len(audio)], RATE)
+        report[name] = rows
+        print(name)
+        for key, row in rows.items():
+            print(f"  {key:<14} " + "  ".join(f"{k.replace('envelope', 'env')}={v:.3f}" for k, v in row.items()))
+    scope.write_json(run / "analysis" / "envelopes.json", report)
+    return 0
+
+
 def cmd_bands(args):
     """Per-band correlation with the final for every decoded step, both views."""
     run = pathlib.Path(args.run).expanduser().resolve()
@@ -525,6 +556,10 @@ def main():
     c.add_argument("run")
     c.add_argument("--seeds", default="1,2,3,4")
     c.set_defaults(fn=cmd_noise_seeds)
+
+    c = sub.add_parser("envelopes", parents=[common])
+    c.add_argument("run")
+    c.set_defaults(fn=cmd_envelopes)
 
     c = sub.add_parser("bands", parents=[common])
     c.add_argument("run")

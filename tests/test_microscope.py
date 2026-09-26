@@ -206,3 +206,21 @@ def test_band_correlation_separates_frequencies():
     row = scope.band_correlations(only_low, final, 48000)
     assert row["sub/bass"] == pytest.approx(1, abs=1e-6)
     assert row["presence"] == pytest.approx(np.cos(1.3), abs=1e-3)
+
+
+def test_envelope_similarity_ignores_phase():
+    t = np.arange(96000) / 48000
+    gate = (np.sin(2 * np.pi * 2 * t) > 0).astype(float)
+    final = np.stack([gate * np.sin(2 * np.pi * 440 * t)] * 2, axis=1)
+    shifted = np.stack([gate * np.sin(2 * np.pi * 440 * t + 2.0)] * 2, axis=1)
+    assert scope.audio_metrics(shifted, final, 48000)["correlation_final"] < 0
+    assert scope.envelope_similarity(shifted, final, 48000)["envelope"] > 0.99
+
+
+def test_envelope_drops_bands_with_no_frequency_bin():
+    t = np.arange(48000) / 48000
+    env = scope.envelope(np.sin(2 * np.pi * 440 * t), 48000)
+    assert env.shape[1] == len(scope.envelope_centres(48000)) < 48
+    freqs = np.fft.rfftfreq(4096, 1 / 48000)
+    edges = np.geomspace(40, 16000, 49)
+    assert len(scope.envelope_centres(48000)) == len(set(np.digitize(freqs[(freqs >= 40) & (freqs < 16000)], edges)))
