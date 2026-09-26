@@ -45,11 +45,9 @@ Open work only. Each item has a checkable "done when"; finished items move to DO
   confirm the map on a second and third song, and set each knob's safe range from the probe.
   Done when: the map is confirmed across songs and the user has chosen the knob set.
 
-- **Sound of another song without its content: statistics matching.** Starting the solve
-  partway from an encoded reference carries its content, not just its sound (see DONE,
-  reference blends). Instead: shift and scale each of the take's 64 latent channels so its mean
-  and spread match the reference's (no timing, so no rhythm can ghost through), with a
-  0-100% amount, in the mixer. Done when: the user has heard Slow Down matched to Bad Dream.
+- **Match to several recordings at once.** One reference's per-channel stats gave little by
+  ear. Pool all five Cannons tracks (an "album sound") and match with the level held constant,
+  so loudness does not stand in for tone. Done when: the user has heard it, or drops the idea.
 - **Tone tilt on a finished take.** A post-decode EQ (tilt / high shelf / low cut) applied to
   a take without re-rendering, so the same performance can lean `/` (warm) or `\` (bright).
   Plain mixing, not the model; the question is whether it belongs in the Soundroom as a

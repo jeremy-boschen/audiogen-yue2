@@ -93,3 +93,5 @@ Slow Down take 2, excerpt-based. Signal statistics unless marked "by ear".
 - **Principal-direction knobs: nothing by ear.** Top 12 directions of 87 takes' latents (59 of
   them cheap_looks), offered in the mixer: "didn't notice anything that sounded good". The
   strongest are mixes of the single-channel knobs. Now behind `latent_mixer.py --directions`.
+- **Matching one reference's channel statistics** (Bad Dream, 0-150%): by ear "isn't giving us
+  much, at least not with only 1 song". Measured at 100%: +6 dB louder, centroid 314 -> 471 Hz.
