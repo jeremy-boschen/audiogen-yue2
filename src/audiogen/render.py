@@ -216,13 +216,20 @@ def request_for(song: Song, step: Step):
                        seed=step.seed, cot=song.cot, abc=abc, cfg_scale=song.cfg_scale)
 
 
-def render_step(pipe, song: Song, step: Step, previous: Take | None = None) -> Take:
-    """Render one step, carrying from `previous` when the step asks for it."""
+def render_step(pipe, song: Song, step: Step, previous: Take | None = None, *,
+                on_token=None, on_step=None) -> Take:
+    """Render one step, carrying from `previous` when the step asks for it.
+
+    ``on_token`` and ``on_step`` are the engine's own observers, passed through
+    untouched: token callbacks for both sampled stages, and every acoustic ODE
+    state (see audiogen.microscope). Left as None, nothing is observed.
+    """
     clock = time.perf_counter()
     stages: dict = {}
     carried: dict = {}
 
-    plan = pipe.plan(request=request_for(song, step), abc_sampling=song.abc_sampling or None)
+    plan = pipe.plan(request=request_for(song, step), abc_sampling=song.abc_sampling or None,
+                     on_token=on_token)
     stages["abc"] = {"hash": hashes.hash_tokens(plan.abc_ids), "tokens": len(plan.abc_ids),
                      "prefix_tokens": len(plan.prefix)}
 
@@ -242,7 +249,7 @@ def render_step(pipe, song: Song, step: Step, previous: Take | None = None) -> T
                    "latent_hash": hashes.hash_array(known_latents)}
 
     sampling = {**song.semantic_sampling, "max_tokens": step.new_tokens}
-    semantic = pipe.generate_semantic(plan, sampling=sampling, carry=carry_tokens)
+    semantic = pipe.generate_semantic(plan, sampling=sampling, carry=carry_tokens, on_token=on_token)
     stages["semantic"] = {"hash": hashes.hash_tokens(semantic.tokens),
                           "tokens": len(semantic.tokens),
                           "seconds": round(len(semantic.tokens) / 25, 2)}
@@ -256,7 +263,8 @@ def render_step(pipe, song: Song, step: Step, previous: Take | None = None) -> T
     latents = pipe.synthesize(semantic, known_latents=known_latents,
                               blend_seconds=step.blend_seconds,
                               chunk_seconds=step.chunk_seconds,
-                              overlap_seconds=step.overlap_seconds)
+                              overlap_seconds=step.overlap_seconds,
+                              **({"on_step": on_step} if on_step is not None else {}))
     stages["latent"] = {"hash": hashes.hash_array(latents), "shape": list(np.shape(latents))}
 
     audio = pipe.decode(latents)
