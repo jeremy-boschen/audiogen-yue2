@@ -95,6 +95,7 @@ guessing. Syllables are a vowel-group heuristic and approximate; the bins
 
     bin/microscope.py prefixes $R --tokens 500,1000,2000,4000   # each prefix solved alone, same seed, no padding
     bin/microscope.py ode-steps $R --steps 1,2,4,8,16,32,64     # final outputs of N-step solves, tokens fixed
+    bin/microscope.py bands $R                                  # per-band correlation with the final, per step
     bin/microscope.py study studies/seed.json                   # see cmd_study for the manifest shape
 
 Step 8 of a 32-step solve and the output of an 8-step solve are different

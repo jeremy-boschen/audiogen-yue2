@@ -402,3 +402,29 @@ def metrics_csv(run: Path) -> str:
             rows.append(",".join("" if v is None else (f"{v:.6g}" if isinstance(v, float) else str(v))
                                  for v in values))
     return "\n".join(rows) + "\n"
+
+
+BANDS = ((20, 150, "sub/bass"), (150, 600, "low-mid"), (600, 2500, "mid"), (2500, 8000, "presence"),
+         (8000, 20000, "air"))
+
+
+def band_correlations(audio: np.ndarray, final: np.ndarray, rate: int, bands=BANDS) -> dict:
+    """Correlation with the final, per frequency band of the mono mix.
+
+    Tests "coarse before fine" on the signal: if low bands settle at earlier
+    steps than high ones, it shows here. A signal statistic, not a percept.
+    """
+    def spectrum(x):
+        mono = np.asarray(x, dtype=np.float64)
+        mono = mono.mean(axis=1) if mono.ndim == 2 else mono
+        return np.fft.rfft(mono - mono.mean())
+    a, f = spectrum(audio), spectrum(final)
+    freqs = np.fft.rfftfreq((len(a) - 1) * 2, 1.0 / rate)
+    out = {}
+    for low, high, name in bands:
+        sel = (freqs >= low) & (freqs < high)
+        # Parseval: the band-limited time-domain correlation, computed in frequency.
+        num = np.real((a[sel] * np.conj(f[sel])).sum())
+        den = np.sqrt((np.abs(a[sel]) ** 2).sum() * (np.abs(f[sel]) ** 2).sum())
+        out[name] = float(num / den) if den else None
+    return out

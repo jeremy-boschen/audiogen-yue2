@@ -9,6 +9,7 @@
     bin/microscope.py annotate RUN --step 12 vocal_present=true words_intelligible=false
     bin/microscope.py annotate RUN --step 4 --predicted vocal_present=true
     bin/microscope.py annotate RUN --phrase verse.1.2 good
+    bin/microscope.py bands RUN                               per-band correlation with the final, per step
     bin/microscope.py timeline RUN                            annotations + metrics -> timeline.{json,md}
     bin/microscope.py study MANIFEST.json                     fixed-ABC / fixed-semantic / seed studies
 
@@ -304,6 +305,25 @@ def cmd_ode_steps(args):
     return 0
 
 
+def cmd_bands(args):
+    """Per-band correlation with the final for every decoded step, both views."""
+    run = pathlib.Path(args.run).expanduser().resolve()
+    final = decoded_pcm(run / "final" / "audio.wav")
+    report = {"bands_hz": [list(b) for b in scope.BANDS]}
+    for view in ("flow_audio_raw", "flow_predicted_audio_raw"):
+        for chunk in sorted((run / view).glob("chunk_*")):
+            rows = {}
+            for wav in sorted(chunk.glob("step_*.wav")):
+                rows[int(wav.stem.split("_")[1])] = scope.band_correlations(decoded_pcm(wav), final, RATE)
+            report.setdefault(view, {})[chunk.name] = rows
+            names = [b[2] for b in scope.BANDS]
+            print(f"{view}/{chunk.name}\n  step  " + "  ".join(f"{n:>9}" for n in names))
+            for step, row in rows.items():
+                print(f"  {step:>4}  " + "  ".join(f"{row[n]:9.3f}" for n in names))
+    scope.write_json(run / "analysis" / "bands.json", report)
+    return 0
+
+
 def cmd_annotate(args):
     run = pathlib.Path(args.run).expanduser()
     path = run / "analysis" / "annotations.json"
@@ -442,6 +462,10 @@ def main():
                    help="judge the predicted-final audio at --step rather than the ODE state")
     c.add_argument("values", nargs="+", help="key=true|false|null, or free text for --phrase")
     c.set_defaults(fn=cmd_annotate)
+
+    c = sub.add_parser("bands", parents=[common])
+    c.add_argument("run")
+    c.set_defaults(fn=cmd_bands)
 
     c = sub.add_parser("timeline", parents=[common])
     c.add_argument("run")

@@ -196,3 +196,13 @@ def test_render_step_passes_observers_only_when_given(monkeypatch):
     observer = object()
     render.render_step(Pipe(), song, step, on_token=print, on_step=observer)
     assert calls["synth"][1]["on_step"] is observer and calls["semantic"]["on_token"] is print
+
+
+def test_band_correlation_separates_frequencies():
+    t = np.arange(48000) / 48000
+    low, high = np.sin(2 * np.pi * 100 * t), np.sin(2 * np.pi * 5000 * t)
+    final = np.stack([low + high] * 2, axis=1)
+    only_low = np.stack([low + np.sin(2 * np.pi * 5000 * t + 1.3)] * 2, axis=1)
+    row = scope.band_correlations(only_low, final, 48000)
+    assert row["sub/bass"] == pytest.approx(1, abs=1e-6)
+    assert row["presence"] == pytest.approx(np.cos(1.3), abs=1e-3)
