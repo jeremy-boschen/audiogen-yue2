@@ -48,6 +48,10 @@ main { padding:16px 20px 40px; display:grid; grid-template-columns:repeat(auto-f
   <div class="stats" id="stats"></div>
   <div class="note">Signal statistics describe the excerpt; they are not a judgement of how it sounds.</div>
 </header>
+<section id="matchsec" hidden style="padding:14px 20px 0"><h2 style="font-size:15px;margin:0 0 4px">Match another recording's sound</h2>
+<div class="sub" style="margin:0 0 8px">Moves each of the 64 channels' average and spread toward the chosen recording's, keeping this take's own movement over time. Averages carry no timing, so the other song's rhythm cannot come through. The first pick of a recording takes a few seconds to encode.</div>
+<div class="bar"><label>Recording <select id="ref"><option value="">none</option></select></label>
+<label>Amount <input id="amount" type="range" min="0" max="1.5" step="0.05" value="0"> <span id="amountv">0%</span></label><span id="refmsg" style="color:var(--muted);font-size:12px"></span></div></section>
 <section id="dirs" hidden style="padding:14px 20px 0"><h2 style="font-size:15px;margin:0 0 4px">Directions</h2>
 <div class="sub" style="margin:0 0 8px">Combinations of channels that move together across every take on disk (principal directions), strongest first. Each moves in units of its own spread; the three channels it leans on most are listed.</div>
 <div id="dgrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px"></div></section>
@@ -56,7 +60,7 @@ main { padding:16px 20px 40px; display:grid; grid-template-columns:repeat(auto-f
 <script>
 const $ = (id) => document.getElementById(id);
 const N = 64;
-const edits = { offset: Array(N).fill(0), gain: Array(N).fill(1), mute: Array(N).fill(false), solo: Array(N).fill(false), master_gain: 1, directions: [] };
+const edits = { offset: Array(N).fill(0), gain: Array(N).fill(1), mute: Array(N).fill(false), solo: Array(N).fill(false), master_gain: 1, directions: [], match_amount: 0 };
 let out = null;                         // listening volume only; never changes what is decoded
 let info, ctx, playing = false, bypass = false, cur = null, inflight = false, dirty = { edited: true, original: true };
 const buffers = { edited: null, original: null }, stats = { edited: null, original: null };
@@ -143,6 +147,15 @@ $('play').onclick = async () => {
 $('ab').onclick = () => { bypass = !bypass; $('ab').classList.toggle('on', bypass); $('ab').textContent = bypass ? 'A/B: hearing original' : 'A/B: hearing edited'; swap(heard()); };
 $('start').oninput = () => { $('startv').textContent = fmt(+$('start').value); changed(true); };
 $('len').onchange = () => changed(true);
+$('ref').onchange = async () => {
+  $('refmsg').textContent = $('ref').value ? 'encoding…' : ''; $('busy').classList.add('on');
+  const r = await fetch('/api/reference', { method: 'POST', body: JSON.stringify({ name: $('ref').value }) });
+  const j = r.ok ? await r.json() : null;
+  $('refmsg').textContent = j ? (j.reference ? `matched to ${Math.round(j.seconds)} s of it` : '') : await r.text();
+  if (!$('ref').value) { $('amount').value = 0; $('amount').oninput(); } else changed();
+};
+$('amount').oninput = () => { edits.match_amount = $('ref').value ? +$('amount').value : 0; $('amountv').textContent = Math.round(+$('amount').value * 100) + '%'; changed(); };
+$('amount').ondblclick = () => { $('amount').value = 0; $('amount').oninput(); };
 $('vol').oninput = () => { if (out) out.gain.value = +$('vol').value; };
 $('freeze').onchange = () => { $('momentl').hidden = $('freeze').value !== 'moment'; changed(true); };
 $('moment').oninput = () => { $('momentv').textContent = (+$('moment').value).toFixed(2) + ' s'; changed(true); };
@@ -150,6 +163,7 @@ $('master').oninput = () => { edits.master_gain = +$('master').value; $('masterv
 $('master').ondblclick = () => { $('master').value = 1; $('master').oninput(); };
 $('reset').onclick = () => {
   edits.offset.fill(0); edits.gain.fill(1); edits.mute.fill(false); edits.solo.fill(false); edits.master_gain = 1; edits.directions.fill(0);
+  $('amount').value = 0; edits.match_amount = 0; $('amountv').textContent = '0%';
   document.querySelectorAll('.dv').forEach((x) => { x.value = 0; x.oninput(); });
   document.querySelectorAll('.o').forEach((x) => { x.value = 0; }); document.querySelectorAll('.g').forEach((x) => { x.value = 1; });
   document.querySelectorAll('.ov').forEach((x) => { x.textContent = '0.00'; }); document.querySelectorAll('.gv').forEach((x) => { x.textContent = '1.00'; });
@@ -170,6 +184,10 @@ fetch('/api/info').then((r) => r.json()).then((d) => {
   $('start').max = Math.max(0, d.seconds - 5); $('startv').textContent = fmt(+$('start').value);
   $('moment').max = d.seconds - 0.04; $('momentv').textContent = (+$('moment').value).toFixed(2) + ' s';
   for (let i = 0; i < N; i++) $('grid').append(strip(i));
+  if (d.references && d.references.length) {
+    $('matchsec').hidden = false;
+    for (const name of d.references) { const o = document.createElement('option'); o.value = name; o.textContent = name.replace(/ \[[^\]]*\]/, '').replace(/\.[^.]+$/, ''); $('ref').append(o); }
+  }
   if (d.directions) {
     edits.directions = Array(d.directions).fill(0); $('dirs').hidden = false;
     for (let k = 0; k < d.directions; k++) {

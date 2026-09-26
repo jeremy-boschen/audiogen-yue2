@@ -17,7 +17,21 @@ def stats(latent: np.ndarray) -> dict:
     return {"mean": latent.mean(axis=0), "std": latent.std(axis=0)}
 
 
-def apply(latent: np.ndarray, edits: dict, whole: dict, basis: dict | None = None) -> np.ndarray:
+def match(latent: np.ndarray, whole: dict, target: dict, amount: float) -> np.ndarray:
+    """Move each channel's average and spread toward ``target``'s (another recording's stats).
+
+    Per channel: x' = target_mean + (x - take_mean) * target_std / take_std, then
+    ``amount`` blends from the take (0) to fully matched (1). Only per-channel
+    statistics move, never timing, so none of the target's rhythm can come through.
+    """
+    if not amount:
+        return latent
+    matched = target["mean"] + (latent - whole["mean"]) * (target["std"] / np.maximum(whole["std"], 1e-6))
+    return (latent + float(amount) * (matched - latent)).astype(np.float32)
+
+
+def apply(latent: np.ndarray, edits: dict, whole: dict, basis: dict | None = None,
+          target: dict | None = None) -> np.ndarray:
     """Return an edited copy of ``latent``; ``whole`` is ``stats`` of the full take.
 
     edits: {"offset": [64] in stds, "gain": [64] around the mean,
@@ -27,9 +41,14 @@ def apply(latent: np.ndarray, edits: dict, whole: dict, basis: dict | None = Non
     shifts it. Master gain scales every channel's movement around its mean.
     "directions": [K] moves along ``basis``'s principal directions, each in units
     of that direction's own spread across the takes it was computed from.
+    "match_amount": 0..1 applies ``match`` toward ``target`` first; the channel
+    edits then act on the matched latent, around the take's own statistics.
     """
     mean, std = whole["mean"], whole["std"]
-    out = latent.astype(np.float32, copy=True)
+    amount = float(edits.get("match_amount") or 0)
+    if amount and target is None:
+        raise ValueError("match_amount needs a target recording")
+    out = match(latent.astype(np.float32, copy=True), whole, target, amount) if amount else latent.astype(np.float32, copy=True)
     offset = np.asarray(edits.get("offset", np.zeros(CHANNELS)), np.float32)
     gain = np.asarray(edits.get("gain", np.ones(CHANNELS)), np.float32)
     mute = np.asarray(edits.get("mute", np.zeros(CHANNELS, bool)), bool)

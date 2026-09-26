@@ -40,7 +40,7 @@ def wav_bytes(audio: np.ndarray) -> bytes:
 
 
 class Mixer:
-    def __init__(self, run: pathlib.Path, models: pathlib.Path, quiet: bool):
+    def __init__(self, run: pathlib.Path, models: pathlib.Path, quiet: bool, references: str | None = None):
         import microscope
         self.run = run
         self.latent = np.load(run / "final" / "latent.npy").astype(np.float32)
@@ -51,6 +51,48 @@ class Mixer:
         found = next((d / "00_latent_directions" / "directions.npz" for d in run.parents
                       if (d / "00_latent_directions" / "directions.npz").exists()), None)
         self.basis = dict(np.load(found)) if found else None
+        self.models = models
+        self.references = pathlib.Path(references).expanduser() if references else None
+        self.encoder = None
+        self.targets: dict[str, dict] = {}          # reference file name -> its latent's per-channel stats
+        self.target = None
+
+    def reference_files(self) -> list[str]:
+        if not self.references or not self.references.is_dir():
+            return []
+        return sorted(p.name for p in self.references.iterdir() if p.suffix.lower() in {".mp3", ".wav", ".flac", ".m4a", ".aiff"})
+
+    def use_reference(self, name: str) -> dict:
+        """Encode a reference recording (cached) and make its channel statistics the match target."""
+        if not name:
+            self.target = None
+            return {"reference": None}
+        if name not in self.reference_files():
+            raise ValueError(f"no reference named {name!r}")
+        if name not in self.targets:
+            import subprocess, tempfile, torch
+            from audiogen import microscope as scope  # noqa: F401
+            import microscope
+            with tempfile.TemporaryDirectory() as tmp:
+                wav = pathlib.Path(tmp) / "ref.wav"
+                subprocess.run(["ffmpeg", "-v", "error", "-i", str(self.references / name), "-ar", str(RATE), "-ac", "2",
+                                "-f", "wav", "-c:a", "pcm_f32le", str(wav)], check=True)
+                audio = microscope.decoded_pcm(wav)
+            with self.lock:
+                if self.encoder is None:
+                    from yue2.modeling_vae import YuE2VAE
+                    self.encoder = YuE2VAE.from_pretrained(self.models / "YuE2-Vae", decoder_only=False, device=self.pipe.device,
+                                                           local_files_only=True, profile=self.pipe.profile)
+                parts, step = [], RATE * 30                          # 30 s at a time keeps encoder memory small
+                with torch.inference_mode():
+                    for a in range(0, len(audio) - 1920, step):
+                        piece = audio[a:a + step]
+                        piece = piece[:len(piece) // 1920 * 1920]
+                        parts.append(self.encoder.encode(torch.as_tensor(piece.T[None], dtype=torch.float32)).squeeze(0).T.float().cpu().numpy())
+            latent = np.concatenate(parts)
+            self.targets[name] = {**mixer.stats(latent), "seconds": len(latent) / 25}
+        self.target = self.targets[name]
+        return {"reference": name, "seconds": round(self.target["seconds"], 1)}
 
     def excerpt(self, start: float, seconds: float) -> slice:
         a = max(0, min(len(self.latent) - 25, round(start * 25)))
@@ -67,7 +109,7 @@ class Mixer:
             part = np.repeat(self.latent[at:at + 1], span.stop - span.start, axis=0)
         elif freeze == "average":
             part = np.repeat(self.whole["mean"][None, :].astype(np.float32), span.stop - span.start, axis=0)
-        edited = part if body.get("bypass") else mixer.apply(part, body.get("edits") or mixer.neutral(), self.whole, self.basis)
+        edited = part if body.get("bypass") else mixer.apply(part, body.get("edits") or mixer.neutral(), self.whole, self.basis, self.target)
         with self.lock:
             clock = time.perf_counter()
             audio = np.asarray(self.pipe.decode(edited), dtype=np.float32)
@@ -101,6 +143,7 @@ def handler_for(state: Mixer):
                 info = {"run": state.run.name if state.run.name != "on-cpu" else f"{state.run.parent.name}/{state.run.name}",
                         "seconds": len(state.latent) / 25, "channels": mixer.CHANNELS,
                         "mean": state.whole["mean"].round(4).tolist(), "std": state.whole["std"].round(4).tolist(),
+                        "references": state.reference_files(),
                         "directions": 0 if state.basis is None else 12,
                         "direction_variance": [] if state.basis is None else state.basis["variance"][:12].round(4).tolist(),
                         "direction_top": [] if state.basis is None else [
@@ -114,6 +157,8 @@ def handler_for(state: Mixer):
                 if self.path == "/api/decode":
                     audio, stats = state.decode(self.body())
                     return self.send(200, wav_bytes(audio), "audio/wav", {"X-Stats": json.dumps(stats)})
+                if self.path == "/api/reference":
+                    return self.send(200, json.dumps(state.use_reference(self.body().get("name") or "")).encode(), "application/json")
                 if self.path == "/api/snapshot":
                     body = self.body()
                     audio, stats = state.decode(body)
@@ -121,7 +166,8 @@ def handler_for(state: Mixer):
                     name = time.strftime("%Y%m%d-%H%M%S")
                     from audiogen import microscope as scope
                     scope.write_wav(folder / f"{name}.wav", audio, RATE)
-                    (folder / f"{name}.json").write_text(json.dumps({**body, "stats": stats}, indent=2) + "\n")
+                    reference = next((k for k, v in state.targets.items() if v is state.target), None)
+                    (folder / f"{name}.json").write_text(json.dumps({**body, "match_reference": reference, "stats": stats}, indent=2) + "\n")
                     return self.send(200, json.dumps({"saved": str(folder / name)}).encode(), "application/json")
             except (ValueError, KeyError, TypeError) as exc:
                 return self.send(400, str(exc).encode(), "text/plain")
@@ -135,8 +181,10 @@ def main() -> int:
     parser.add_argument("--port", type=int, default=8770)
     parser.add_argument("--models", default=str(HERE / "models"))
     parser.add_argument("--quiet", action="store_true")
+    parser.add_argument("--references", default="~/Music/YouTube Downloads/Mosac",
+                        help="a folder of recordings to match the take's sound to")
     args = parser.parse_args()
-    state = Mixer(pathlib.Path(args.run).expanduser().resolve(), pathlib.Path(args.models), args.quiet)
+    state = Mixer(pathlib.Path(args.run).expanduser().resolve(), pathlib.Path(args.models), args.quiet, args.references)
     state.decode({"start": 0, "seconds": 2})                 # load the decoder before the first request
     server = ThreadingHTTPServer(("127.0.0.1", args.port), handler_for(state))
     print(f"latent mixer on http://127.0.0.1:{args.port}/", flush=True)

@@ -61,3 +61,19 @@ def test_directions_move_along_the_basis_in_its_own_units():
     assert np.allclose(out[:, :63], latent[:, :63], atol=1e-5)
     with pytest.raises(ValueError, match="basis"):
         mixer.apply(latent, edits, mixer.stats(latent))
+
+
+def test_match_moves_each_channels_average_and_spread_to_the_targets():
+    latent = take()
+    whole = mixer.stats(latent)
+    target = {"mean": np.linspace(2, 3, 64).astype(np.float32), "std": np.full(64, 0.25, np.float32)}
+    full = mixer.match(latent, whole, target, 1.0)
+    assert np.allclose(full.mean(0), target["mean"], atol=1e-4) and np.allclose(full.std(0), target["std"], atol=1e-4)
+    half = mixer.match(latent, whole, target, 0.5)
+    assert np.allclose(half, (latent + full) / 2, atol=1e-5)
+    # timing is untouched: each channel is a straight rescale of itself
+    assert np.allclose(np.corrcoef(full[:, 5], latent[:, 5])[0, 1], 1.0)
+    edits = mixer.neutral(); edits["match_amount"] = 1.0
+    assert np.allclose(mixer.apply(latent, edits, whole, target=target), full, atol=1e-5)
+    with pytest.raises(ValueError, match="target"):
+        mixer.apply(latent, edits, whole)
