@@ -16,9 +16,6 @@ Open work only. Each item has a checkable "done when"; finished items move to DO
   `index.html` checklist. Done when: `analysis/timeline.md` of
   `20260926-burn_it_down-s777-baseline/on-cpu` has vocal_present, vocal_melody_recognizable
   and words_intelligible filled for both the ODE state and the predicted final.
-- **Fixed-ABC study** (running, holding the baseline's exact plan tokens). Done when:
-  `fixed_abc-summary.json` exists and seed 777's run has the baseline's semantic hash.
-
 ## Soon
 
 - **Burn It Down's budget truncates every seed.** All 8 seeds plan 220-282 s of score

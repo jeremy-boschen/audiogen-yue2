@@ -44,3 +44,14 @@ Fixture: Burn It Down, seed 777, 200 s, `bin/microscope.py capture` in `.venv-de
   reproduces them. Only saved plan tokens (`--plan-from`, a take bundle) are exact.
 - Songs and studio takes from before this carry `"normalize_score": false`, which keeps
   the old trimmed form, so they still reproduce from their text.
+
+## 2026-09-26 — fixed-ABC study and the Slow Down fixture
+
+- **Fixed ABC, 8 seeds** (`studies/burn_it_down-fixed_abc.json`, plan tokens held with
+  `--plan-from`): every run has abc f635635350e6971c; seed 777 reproduces the baseline
+  (semantic 13949b457fa5bbef); the other 7 give 7 different semantic streams. All stop at
+  the 5000-token budget, as in the seed study.
+- **Slow Down take 2 is the explorer's fixture** (`20260926-slow_down-s4417-take2/on-cpu`),
+  captured from studio take #233's own bundle with `--plan-from`: semantic
+  03afb4c03992cbe5 and latent ea116c64d81f212e equal the bundle's, and the decoded FLAC
+  samples are identical (4456320 frames). It ends on its own end token (2322 tokens, 92.84 s).

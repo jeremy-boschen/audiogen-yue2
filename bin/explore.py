@@ -25,7 +25,7 @@ from audiogen import explore  # noqa: E402
 
 RUNS = HERE.parent / "audiogen/output/microscope-runs"
 DEFAULT_OUT = RUNS / "00_explore"
-DEFAULT_RUN = RUNS / "20260926-burn_it_down-s777-baseline/on-cpu"
+DEFAULT_RUN = RUNS / "20260926-slow_down-s4417-take2/on-cpu"   # studio take #233, bit-identical
 DEFAULT_ROOTS = [RUNS / "20260926-burn_it_down-s777-baseline", RUNS / "burn_it_down-studies"]
 
 
