@@ -95,6 +95,9 @@ class Song:
     seed: int
     cot: str = "full"
     cfg_scale: float | None = None
+    # False keeps the handling songs rendered before 2026-09-26 16:40 were made
+    # with: a supplied score trimmed with no trailing newline (render.canonical_score).
+    normalize_score: bool = True
     generation_config: dict = field(default_factory=dict)
     abc_sampling: dict = field(default_factory=dict)
     semantic_sampling: dict = field(default_factory=dict)
@@ -152,8 +155,11 @@ def load(root: Path) -> Song:
                           score_file=raw.get("score_file"),
                           lyrics_file=raw.get("lyrics_file"),
                           style_file=raw.get("style_file")))
+    if not isinstance(spec.get("normalize_score", True), bool):
+        raise ValueError(f"{root.name}: normalize_score must be true or false")
     song = Song(root=root, id=spec.get("id", root.name), seed=seed, cot=spec.get("cot", "full"),
-                cfg_scale=spec.get("cfg_scale"), generation_config=spec.get("generation_config", {}),
+                cfg_scale=spec.get("cfg_scale"), normalize_score=spec.get("normalize_score", True),
+                generation_config=spec.get("generation_config", {}),
                 abc_sampling=spec.get("abc_sampling", {}),
                 semantic_sampling=spec.get("semantic_sampling", {}),
                 lora=spec.get("lora", []), pipeline=spec.get("pipeline", {}),

@@ -31,3 +31,16 @@ Fixture: Burn It Down, seed 777, 200 s, `bin/microscope.py capture` in `.venv-de
   correlation (noise seeds read 0.987, pure noise's low band 0.94). Fixed by dropping them.
 - **Seed study (8 seeds):** seed 777 reproduces the baseline exactly. Every seed plans
   220-282 s of score against a 200 s budget; all are truncated.
+
+## 2026-09-26 — supplied scores take the planner's form
+
+- **Planned scores all end in exactly one newline**, and `request_for` stripped it, so a
+  planned score supplied back as text changed its last ABC token and the whole take
+  (Burn It Down s777: semantic f501d690 vs 13949b45). `render.canonical_score` now trims
+  and restores that one newline. Every planned score in `output/**/*.take.zip` that
+  re-encodes at all re-encodes exactly this way (16 distinct).
+- **Text cannot hold every score.** 8 cheap_looks scores (abc temperature 1.3) were written
+  in non-canonical BPE splits (`C`+`FA` where encoding gives `CF`+`A`); no text rule
+  reproduces them. Only saved plan tokens (`--plan-from`, a take bundle) are exact.
+- Songs and studio takes from before this carry `"normalize_score": false`, which keeps
+  the old trimmed form, so they still reproduce from their text.

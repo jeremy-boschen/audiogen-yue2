@@ -246,3 +246,10 @@ def test_a_line_holding_only_a_tied_tail_joins_the_previous_phrase():
     verse = [e for e in s.voices["Vocal"] if e.section == 1]
     groups = score_module.by_line(verse)
     assert all(any(e.kind == "note" and e.onset for e in g) for g in groups)
+
+
+def test_a_supplied_score_takes_the_planners_form():
+    planned = 'X:1\nK:Cm\nV: Vocal\n"Cm"c4z4|\n'
+    for edited in (planned, planned.rstrip("\n"), "\n  " + planned + "\n\n", planned.replace("\n", "\n", 1)):
+        assert render.canonical_score(edited) == planned
+    assert render.canonical_score("  \n") is None and render.canonical_score(None) is None

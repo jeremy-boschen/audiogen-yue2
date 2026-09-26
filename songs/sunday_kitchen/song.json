@@ -2,6 +2,7 @@
   "id": "sunday_kitchen",
   "seed": 2026,
   "cot": "full",
+  "normalize_score": false,
   "abc_sampling": {
     "temperature": 0.7,
     "top_p": 0.9,

@@ -463,9 +463,8 @@ def cmd_study(args):
     if kind in ("seed", "fixed_abc"):
         plan_from = None
         if kind == "fixed_abc":
-            # Held as the exact plan tokens. Supplying score.abc as text is not the
-            # same score: the request strips its trailing newline, which changes the
-            # last ABC token and, with it, the whole take.
+            # Held as the exact plan tokens, so the study never depends on
+            # re-tokenising text (render.canonical_score).
             plan_from = pathlib.Path(manifest["score_from"]).expanduser()
             if not (plan_from / "take" / "plan_manifest.json").exists():
                 raise SystemExit(f"{plan_from} has no saved plan")

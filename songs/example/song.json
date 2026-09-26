@@ -2,6 +2,7 @@
   "id": "example",
   "seed": 777,
   "cot": "full",
+  "normalize_score": false,
   "steps": [
     {
       "id": "take",

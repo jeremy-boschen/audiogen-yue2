@@ -201,6 +201,18 @@ def request_id(song: Song, step: Step) -> str:
     return re.sub(r"[^A-Za-z0-9_.-]", "-", name)[:180]
 
 
+def canonical_score(text: str | None) -> str | None:
+    """A supplied score in the form the planner writes: trimmed, ending in one newline.
+
+    The planner's own scores always end in exactly one newline, so a score that
+    was planned, saved and supplied back re-tokenises to the planner's exact
+    ABC ids however it was edited or saved in between. Stripping the newline
+    changes the last ABC token, and with it the whole take.
+    """
+    text = (text or "").strip()
+    return text + "\n" if text else None
+
+
 def request_for(song: Song, step: Step):
     from yue2.protocol import SongRequest
     def text_input(key, fallback):
@@ -208,7 +220,10 @@ def request_for(song: Song, step: Step):
         return (song.root / filename).read_text() if filename is not None else fallback
 
     score = text_input("score_file", song.abc)
-    abc = score.strip() or None if score is not None else None
+    if getattr(song, "normalize_score", True):
+        abc = canonical_score(score)
+    else:
+        abc = score.strip() or None if score is not None else None
     # Explicit style and lyric files retain their whitespace.
     style = text_input("style_file", song.style)
     lyrics = text_input("lyrics_file", song.lyrics)
