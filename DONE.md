@@ -123,3 +123,16 @@ The tone, including the `/` tilt, comes from the latent. The two decoders differ
 - Slow Down had only 1 s of gaps, too little to count.
 
 As measured, the knobs act on the whole mix, not the voice. The page renders each knob "sung only" and "gaps only" for the ear to confirm: output/microscope-runs/00_knobs_sung/.
+
+## A preview from the first seconds (2026-09-26)
+
+`bin/preview_prefix.py` on Slow Down take 2, where the full take took 140 s.
+
+| budget | semantic tokens | time | sound stage on those tokens alone | time | decode |
+|---|---|---|---|---|---|
+| 10 s | identical to the take's first 250 tokens | 9.2 s | latent differs from frame 0 (diff −0.9 dB rel.), envelope vs take 0.85 | 3.2 s | 0.8 s |
+| 30 s | identical to the take's first 750 tokens | 22.1 s | diff −7.8 dB, envelope 0.98 | 9.6 s | 1.2 s |
+
+- The semantic stage is prefix-exact: a short budget writes exactly the take's opening, so the song itself is the same.
+- The sound stage sees the whole song at once (one chunk up to ~440 s), so rendering a prefix alone is a different performance of the same tokens, like a new noise draw.
+- A 10 s preview costs ~13 s and a 30 s preview ~33 s. The ear decides whether it stands in for the take. Page: RUN/on-cpu/preview_prefix/.
