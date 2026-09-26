@@ -35,6 +35,14 @@ Open work only. Each item has a checkable "done when"; finished items move to DO
 
 ## Research (banked)
 
+- **Start a take from another song's sound (next test after the probe kit).** The VAE ships
+  its encoder (`modeling_vae.py` `encode`, `encoder.*` weights in YuE2-Vae), so any recording
+  can become a latent. Encode a known song (Cannons, in `~/Music/YouTube Downloads/Mosac`),
+  then solve Slow Down take 2's tokens from a partial blend of it with noise (start at round k
+  of 32 instead of 0, via `synthesize(noise=)` or a start-step hook) at a few blend amounts.
+  Question: does the reference's tone/weight ("mastered the same way") carry over, and when
+  does its own rhythm start ghosting through? Done when: the user has heard the blends.
+
 - **Tone tilt on a finished take.** A post-decode EQ (tilt / high shelf / low cut) applied to
   a take without re-rendering, so the same performance can lean `/` (warm) or `\` (bright).
   Plain mixing, not the model; the question is whether it belongs in the Soundroom as a
