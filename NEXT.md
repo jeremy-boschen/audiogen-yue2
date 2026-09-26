@@ -41,9 +41,13 @@ Open work only. Each item has a checkable "done when"; finished items move to DO
   ear), ch1 raises the noise floor ("grain"), ch55 air/brightness, ch34 body, ch15 presence,
   ch26 stereo spread (+26 dB left-to-right leak, wider on decorrelated noise). A take-level
   Sound panel: named knobs, live looped preview with A/B, "keep" decodes the whole take with
-  the settings as a new version (original untouched, settings stored with it). Before building:
-  confirm the map on a second and third song, and set each knob's safe range from the probe.
-  Done when: the map is confirmed across songs and the user has chosen the knob set.
+  the settings as a new version (original untouched, settings stored with it), or stores them
+  in the song so every render applies them after decoding. The map holds across five songs,
+  encoded recordings included (DONE.md, 2026-09-26). The knobs act on the whole mix and can't be
+  aimed at the voice, so there is no automatic sung/gaps mode. Instead: **user-placed automation.**
+  The user sets a knob at points in the song, the moves are recorded, and edges ramp (the decoder
+  hears ~0.5 s either side). Still to set: each knob's safe range from the probe. Done when: the
+  user has chosen the knob set and heard automation on a take.
 
 - **Match to several recordings at once.** One reference's per-channel stats gave little by
   ear. Pool all five Cannons tracks (an "album sound") and match with the level held constant,
