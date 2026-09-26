@@ -241,33 +241,46 @@
         if (step === loadedStep || (pending && pending.step === step)) return;
         if (pending) stopAll(pending.set);
         const set = { state: make(D.audio.state[step]), predicted: make(D.audio.predicted[step]) };
-        pending = { step, set, born: performance.now(), started: false };
-        const lead = 0.35;
+        pending = { step, set, born: performance.now() };
+        // Seek while still paused (never while playing), a hair ahead of the master to cover
+        // the start-up latency; the drift corrector removes what is left after adoption.
         [set.state, set.predicted].forEach((a) => {
-          a.addEventListener('loadedmetadata', () => { a.currentTime = time() + lead; }, { once: true });
-          a.addEventListener('canplay', () => { if (pending && pending.set === set && a.paused) a.play().catch(() => null); }, { once: true });
+          a.addEventListener('canplay', () => {
+            if (!pending || pending.set !== set || !a.paused) return;
+            a.currentTime = Math.min(D.seconds - 0.05, time() + 0.05);
+            a.play().catch(() => null);
+          }, { once: true });
         });
-      }, 220);
+      }, 150);
+    }
+    function adopt() {
+      const prev = els;
+      els = { state: pending.set.state, predicted: pending.set.predicted, finished: prev.finished };
+      loadedStep = pending.step; pending = null;
+      // fade the outgoing pair out, then drop it
+      const out = [prev.state, prev.predicted];
+      const fade = setInterval(() => {
+        out.forEach((a) => { a.volume = Math.max(0, a.volume - 0.2); });
+        if (out.every((a) => a.volume <= 0)) { clearInterval(fade); out.forEach((a) => { a.pause(); a.removeAttribute('src'); a.load(); }); }
+      }, 20);
     }
     function tick() {
       if (!els) return;
       const w = want();
       const m = master();
-      // adopt a pending step once both of its elements are playing near the master clock
+      // Adopt a pending step as soon as both of its elements are actually playing and within a
+      // quarter second of the master. A pair that never starts is dropped, never adopted:
+      // adopting a paused pair is what used to leave the audio silent until a restart.
       if (pending && ui.playing) {
-        const ok = [pending.set.state, pending.set.predicted].every((a) => !a.paused && Math.abs(a.currentTime - m.currentTime) < 0.08);
-        const old = performance.now() - pending.born > 4000;
-        if (ok || old) {
-          const prev = els;
-          els = { state: pending.set.state, predicted: pending.set.predicted, finished: prev.finished };
-          loadedStep = pending.step; pending = null;
-          // fade the outgoing pair out, then drop it
-          const out = [prev.state, prev.predicted];
-          const fade = setInterval(() => {
-            out.forEach((a) => { a.volume = Math.max(0, a.volume - 0.2); });
-            if (out.every((a) => a.volume <= 0)) { clearInterval(fade); out.forEach((a) => { a.pause(); a.removeAttribute('src'); a.load(); }); }
-          }, 20);
-        }
+        const pair = [pending.set.state, pending.set.predicted];
+        if (pair.every((a) => !a.paused && a.readyState >= 3 && Math.abs(a.currentTime - m.currentTime) < 0.25)) adopt();
+        else if (performance.now() - pending.born > 6000) { stopAll(pending.set); pending = null; }
+      }
+      // Anything that should be sounding but has stalled is restarted at the master's time.
+      if (ui.playing && !m.paused) {
+        [els.state, els.predicted].forEach((a) => {
+          if (a.paused && !a.ended && a.readyState >= 2) { a.currentTime = m.currentTime; a.play().catch(() => null); }
+        });
       }
       const drift = (a) => {
         if (!ui.playing || a.paused || a === m) return;
