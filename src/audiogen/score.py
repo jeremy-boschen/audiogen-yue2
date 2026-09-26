@@ -44,10 +44,34 @@ def length(text: str) -> Fraction:
     return Fraction(int(top or 1), int(bottom or 2))
 
 
-def midi(pitch: str, accidental: str, octave: str) -> int:
+def midi(pitch: str, accidental: str, octave: str, implied: int = 0) -> int:
+    """MIDI number. `implied` is the key signature's or bar's accidental, used
+    only when the note carries none of its own ('=' is an explicit natural)."""
     base = 60 + PITCH_CLASS[pitch.upper()] + (12 if pitch.islower() else 0)
-    base += accidental.count("^") - accidental.count("_")
+    base += accidental.count("^") - accidental.count("_") if accidental else implied
     return base + 12 * octave.count("'") - 12 * octave.count(",")
+
+
+SHARPS, FLATS = "FCGDAEB", "BEADGCF"
+MAJOR = {"C": 0, "G": 1, "D": 2, "A": 3, "E": 4, "B": 5, "F#": 6, "C#": 7,
+         "F": -1, "Bb": -2, "Eb": -3, "Ab": -4, "Db": -5, "Gb": -6, "Cb": -7}
+MINOR = {"A": 0, "E": 1, "B": 2, "F#": 3, "C#": 4, "G#": 5, "D#": 6, "A#": 7,
+         "D": -1, "G": -2, "C": -3, "F": -4, "Bb": -5, "Eb": -6, "Ab": -7}
+
+
+def key_signature(key: str) -> dict[str, int]:
+    """Letter -> semitone offset for a K: field such as 'D#m', 'Bb' or 'Am'.
+
+    Major and minor only; a mode or unknown key reads as no signature.
+    """
+    match = re.match(r"^\s*([A-Ga-g])([#b]?)\s*(m|min|minor|maj|major)?\b", key or "")
+    if not match:
+        return {}
+    tonic = match.group(1).upper() + match.group(2)
+    minor = (match.group(3) or "").lower() in ("m", "min", "minor")
+    count = (MINOR if minor else MAJOR).get(tonic, 0)
+    letters = SHARPS[:count] if count > 0 else FLATS[:-count]
+    return {letter: (1 if count > 0 else -1) for letter in letters}
 
 
 @dataclass
@@ -99,6 +123,8 @@ def parse(text: str) -> Score:
     in_body = False
     voice = None
     carried = {}               # voice -> an open tie waiting for its next note
+    signature = {}             # letter -> offset from K:
+    in_bar = {}                # voice -> {(letter, octave): offset} set by accidentals this bar
     source = 0
     for raw in text.split("\n"):
         line = raw.strip()
@@ -124,6 +150,7 @@ def parse(text: str) -> Score:
                 score.headers[key] = value
                 if key == "K":
                     in_body = True
+                    signature = key_signature(value)
             continue
         if not in_body or voice is None:
             continue
@@ -141,6 +168,7 @@ def parse(text: str) -> Score:
                     score.meters.append(element.group("field")[3:-1].strip())
             elif element.group("bar"):
                 score.bars[voice] += 1
+                in_bar.pop(voice, None)
             elif element.group("mrest"):
                 count = int(element.group("mcount") or 1)
                 events.append(Event("rest", bar_units(score) * count, section, score.bars[voice], line=source))
@@ -150,7 +178,14 @@ def parse(text: str) -> Score:
                                     chord=chord, line=source))
                 carried.pop(voice, None)
             elif element.group("note"):
-                pitch = midi(element.group("pitch"), element.group("acc") or "", element.group("octave"))
+                letter, accidental = element.group("pitch"), element.group("acc") or ""
+                spot = (letter, element.group("octave"))
+                bar = in_bar.setdefault(voice, {})
+                if accidental:
+                    # An accidental holds for the same note for the rest of the bar.
+                    bar[spot] = accidental.count("^") - accidental.count("_")
+                pitch = midi(letter, accidental, element.group("octave"),
+                             bar.get(spot, signature.get(letter.upper(), 0)))
                 open_tie = carried.pop(voice, None)
                 tied = bool(element.group("tie"))
                 events.append(Event("note", length(element.group("nlen")), section, score.bars[voice],
@@ -306,8 +341,14 @@ def by_line(events: list[Event]) -> list[list[Event]]:
     out = []
     for group in groups.values():
         notes = [i for i, e in enumerate(group) if e.kind == "note"]
-        if notes:
-            out.append(group[notes[0]:notes[-1] + 1])
+        if not notes:
+            continue
+        if out and not any(e.kind == "note" and e.onset for e in group):
+            # Only the tail of a note tied from the previous line: it is still
+            # that line's phrase, not a phrase of its own with no notes.
+            out[-1].extend(group[:notes[-1] + 1])
+            continue
+        out.append(group[notes[0]:notes[-1] + 1])
     return out
 
 

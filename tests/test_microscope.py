@@ -224,3 +224,21 @@ def test_envelope_drops_bands_with_no_frequency_bin():
     freqs = np.fft.rfftfreq(4096, 1 / 48000)
     edges = np.geomspace(40, 16000, 49)
     assert len(scope.envelope_centres(48000)) == len(set(np.digitize(freqs[(freqs >= 40) & (freqs < 16000)], edges)))
+
+
+def test_key_signature_applies_until_an_accidental_in_the_bar():
+    s = score_module.parse("X:1\nL:1/8\nK:D#m\nV: Vocal\nF2 ^F2 =F2 F2 | F2 C2 G2 D2 B2 |\n")
+    pitches = [e.pitch for e in s.voices["Vocal"]]
+    # D#m has six sharps (F C G D A E); =F holds for the rest of its bar only.
+    assert pitches[:4] == [66, 66, 65, 65]
+    assert pitches[4:] == [66, 61, 68, 63, 71]
+    assert score_module.key_signature("Bb") == {"B": -1, "E": -1}
+    assert score_module.key_signature("Dorian nonsense") == {}
+
+
+def test_a_line_holding_only_a_tied_tail_joins_the_previous_phrase():
+    text = SCORE.replace('"C"c2c2d2d2e8|"G"z16|', '"C"c2c2d2d2e8-|\nV: Vocal\n"G"e4z12|')
+    s = score_module.parse(text)
+    verse = [e for e in s.voices["Vocal"] if e.section == 1]
+    groups = score_module.by_line(verse)
+    assert all(any(e.kind == "note" and e.onset for e in g) for g in groups)
