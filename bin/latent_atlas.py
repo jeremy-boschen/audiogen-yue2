@@ -5,7 +5,7 @@
 
 For every channel, decodes the excerpt with that channel offset by +amount and
 -amount of its own standard deviations, and compares each against the untouched
-decode, band by band (32 log bands, 30 Hz - 20 kHz):
+decode, band by band (24 log bands, 40 Hz - 20 kHz, each at least 4 FFT bins wide):
 
   curve      mean level change per band, dB: the channel's EQ curve
   steadiness how much that change moves over time (median over bands of the std
@@ -32,18 +32,24 @@ sys.path.insert(0, str(HERE / "bin"))
 from audiogen import latent_mixer as mixer  # noqa: E402
 
 RATE = 48000
-EDGES = np.geomspace(30, 20000, 33)
+# 24 bands from 40 Hz: with a 16384-point FFT (2.9 Hz resolution) the narrowest band
+# still holds 4 bins. 32 bands from 30 Hz on a 4096-point FFT left some bands with
+# one bin or none, which drew spikes (or a flat 0) at the bottom of every curve.
+N_FFT, HOP = 16384, 4096
+EDGES = np.geomspace(40, 20000, 25)
 CENTRES = np.sqrt(EDGES[:-1] * EDGES[1:])
 
 
-def band_power(audio: np.ndarray, n_fft: int = 4096, hop: int = 2048) -> np.ndarray:
-    """[frames, 32] power per log band of the mono mix."""
+def band_power(audio: np.ndarray, n_fft: int = N_FFT, hop: int = HOP) -> np.ndarray:
+    """[frames, bands] power per log band of the mono mix."""
     x = audio.mean(axis=1)
     window = np.hanning(n_fft)
     frames = np.stack([x[i:i + n_fft] * window for i in range(0, len(x) - n_fft, hop)])
     power = np.abs(np.fft.rfft(frames, axis=1)) ** 2
     freqs = np.fft.rfftfreq(n_fft, 1 / RATE)
     which = np.digitize(freqs, EDGES) - 1
+    if min(int((which == b).sum()) for b in range(len(CENTRES))) < 4:
+        raise ValueError("a band holds fewer than 4 FFT bins; widen the bands or lengthen the FFT")
     return np.stack([power[:, which == b].sum(axis=1) for b in range(len(CENTRES))], axis=1) + 1e-12
 
 
@@ -113,7 +119,7 @@ select,button{font:inherit;color:#e8ecf6;background:#18223d;border:1px solid #26
 </style>
 <h1>What each latent channel does, as an EQ curve</h1>
 <p>Each card: the level change per frequency band when that channel is pushed up (<span class="k" style="background:#ffc2e3"></span>pink) or down (<span class="k" style="background:#8fd3ff"></span>blue) by <b id="amt"></b> of its own spread, and with its gain at <b id="gn"></b> (<span class="k" style="background:#b69cff"></span>violet, the mixer's gain slider at its top), against the untouched decode.
-Grid lines at ±6 dB; 30 Hz on the left, 20 kHz on the right. <b>steady</b> is how much the change wobbles over time (low = acts like a fixed EQ); <b>mirror</b> near −1 means up and down are opposite settings of one knob.
+Grid lines at ±6 dB; 40 Hz on the left, 20 kHz on the right. <b>steady</b> is how much the change wobbles over time (low = acts like a fixed EQ); <b>mirror</b> near −1 means up and down are opposite settings of one knob.
 Signal statistics, not a verdict.</p>
 <div class="bar">Sort <select id="sort"><option value="channel">channel</option><option value="size">biggest change</option><option value="gain">biggest gain change</option><option value="steady">most EQ-like</option><option value="mirror">most knob-like</option></select>
 <span id="info"></span></div>
