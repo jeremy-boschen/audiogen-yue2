@@ -9,6 +9,7 @@
     bin/microscope.py annotate RUN --step 12 vocal_present=true words_intelligible=false
     bin/microscope.py annotate RUN --step 4 --predicted vocal_present=true
     bin/microscope.py annotate RUN --phrase verse.1.2 good
+    bin/microscope.py noise-seeds RUN --seeds 1,2,3,4          same tokens, different acoustic noise
     bin/microscope.py bands RUN                               per-band correlation with the final, per step
     bin/microscope.py timeline RUN                            annotations + metrics -> timeline.{json,md}
     bin/microscope.py study MANIFEST.json                     fixed-ABC / fixed-semantic / seed studies
@@ -305,6 +306,38 @@ def cmd_ode_steps(args):
     return 0
 
 
+def cmd_noise_seeds(args):
+    """Hold the semantic tokens and plan fixed; vary only the acoustic noise seed.
+
+    The engine draws acoustic noise from the request seed, which also seeded the
+    tokens. Re-solving the SAME tokens with a copy of the plan whose request
+    carries another seed changes the noise and nothing else: the seed is not
+    part of the token prefix, which pipe.synthesize verifies.
+    """
+    from yue2.pipeline import SemanticResult
+    run = pathlib.Path(args.run).expanduser().resolve()
+    plan, tokens = load_take(run)
+    song, _ = song_for_run(run, args.models)
+    pipe = renderer.build_pipeline(pathlib.Path(args.models), song, progress=not args.quiet)
+    final = decoded_pcm(run / "final" / "audio.wav")
+    out = run / "noise_seeds"
+    rows = []
+    for seed in [int(s) for s in args.seeds.split(",")]:
+        other = dataclasses.replace(plan, request=dataclasses.replace(plan.request, seed=seed))
+        latents, audio = synthesize_decode(pipe, SemanticResult(other, tokens, {}, False))
+        scope.write_wav(out / f"noise_s{seed}.wav", audio, RATE)
+        np.save(out / f"noise_s{seed}.latent.npy", latents)
+        row = {"noise_seed": seed, "latent_hash": hashes.hash_array(latents), "pcm_hash": hashes.hash_array(audio),
+               **scope.audio_metrics(audio, final, RATE), "bands": scope.band_correlations(audio, final, RATE)}
+        rows.append(row)
+        print(f"  noise seed {seed}: corr {row.get('correlation_final'):.4f}  bands "
+              + " ".join(f"{k}={v:.3f}" for k, v in row["bands"].items()))
+    scope.write_json(out / "analysis.json", {
+        "note": "semantic tokens and plan fixed; only the acoustic noise seed varies",
+        "token_seed": plan.request.seed, "semantic_hash": hashes.hash_tokens(tokens), "rows": rows})
+    return 0
+
+
 def cmd_bands(args):
     """Per-band correlation with the final for every decoded step, both views."""
     run = pathlib.Path(args.run).expanduser().resolve()
@@ -360,7 +393,7 @@ def cmd_study(args):
 
     {"kind": "seed" | "fixed_abc" | "fixed_semantic", "song": "burn_it_down",
      "out": "<dir>", "seeds": [...], "score_from": "<run>", "semantic_from": "<run>",
-     "ode_steps": [...], "capture": {"ode_checkpoints": "0,8,16,24,32", "no_decode": true}}
+     "ode_steps": [...], "noise_seeds": [...], "capture": {"ode_checkpoints": "0,8,16,24,32", "no_decode": true}}
     """
     manifest = json.loads(pathlib.Path(args.manifest).read_text())
     out = pathlib.Path(manifest["out"]).expanduser()
@@ -388,8 +421,15 @@ def cmd_study(args):
             subprocess.run(cmd, check=True)
     elif kind == "fixed_semantic":
         source = pathlib.Path(manifest["semantic_from"]).expanduser()
-        steps = ",".join(str(s) for s in manifest.get("ode_steps", [8, 16, 32, 64]))
-        subprocess.run(base + ["ode-steps", str(source), "--steps", steps], check=True)
+        wanted = manifest.get("ode_steps", [8, 16, 32, 64])
+        done = source / "ode_steps" / "analysis.json"
+        if done.exists() and [r["ode_steps"] for r in json.loads(done.read_text())["rows"]] == wanted:
+            print(f"  have ode_steps {wanted}")
+        else:
+            subprocess.run(base + ["ode-steps", str(source), "--steps", ",".join(map(str, wanted))], check=True)
+        if manifest.get("noise_seeds"):
+            subprocess.run(base + ["noise-seeds", str(source), "--seeds",
+                                   ",".join(str(s) for s in manifest["noise_seeds"])], check=True)
     else:
         raise SystemExit(f"unknown study kind {kind!r}")
     if kind != "fixed_semantic":
@@ -462,6 +502,11 @@ def main():
                    help="judge the predicted-final audio at --step rather than the ODE state")
     c.add_argument("values", nargs="+", help="key=true|false|null, or free text for --phrase")
     c.set_defaults(fn=cmd_annotate)
+
+    c = sub.add_parser("noise-seeds", parents=[common])
+    c.add_argument("run")
+    c.add_argument("--seeds", default="1,2,3,4")
+    c.set_defaults(fn=cmd_noise_seeds)
 
     c = sub.add_parser("bands", parents=[common])
     c.add_argument("run")

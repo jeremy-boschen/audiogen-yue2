@@ -1,0 +1,24 @@
+{
+  "kind": "fixed_semantic",
+  "song": "burn_it_down",
+  "out": "~/dev/projects/audiogen/output/microscope-runs/burn_it_down-studies",
+  "semantic_from": "~/dev/projects/audiogen/output/microscope-runs/20260926-burn_it_down-s777-baseline/on-cpu",
+  "ode_steps": [
+    1,
+    2,
+    4,
+    8,
+    12,
+    16,
+    24,
+    32,
+    48,
+    64
+  ],
+  "noise_seeds": [
+    1,
+    2,
+    3,
+    4
+  ]
+}

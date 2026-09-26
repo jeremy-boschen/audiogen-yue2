@@ -1,0 +1,7 @@
+{
+  "kind": "seed",
+  "song": "burn_it_down",
+  "out": "~/dev/projects/audiogen/output/microscope-runs/burn_it_down-studies",
+  "seeds": [777, 101, 202, 303, 404, 505, 606, 707],
+  "capture": {"ode_checkpoints": "0,2,4,8,16,24,32", "no_decode": true}
+}
