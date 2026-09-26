@@ -48,6 +48,9 @@ class Mixer:
         song, _ = microscope.song_for_run(run, str(models))
         self.pipe = microscope.renderer.build_pipeline(models, song, progress=not quiet)
         self.lock = threading.Lock()          # one decode at a time on the GPU
+        found = next((d / "00_latent_directions" / "directions.npz" for d in run.parents
+                      if (d / "00_latent_directions" / "directions.npz").exists()), None)
+        self.basis = dict(np.load(found)) if found else None
 
     def excerpt(self, start: float, seconds: float) -> slice:
         a = max(0, min(len(self.latent) - 25, round(start * 25)))
@@ -64,7 +67,7 @@ class Mixer:
             part = np.repeat(self.latent[at:at + 1], span.stop - span.start, axis=0)
         elif freeze == "average":
             part = np.repeat(self.whole["mean"][None, :].astype(np.float32), span.stop - span.start, axis=0)
-        edited = part if body.get("bypass") else mixer.apply(part, body.get("edits") or mixer.neutral(), self.whole)
+        edited = part if body.get("bypass") else mixer.apply(part, body.get("edits") or mixer.neutral(), self.whole, self.basis)
         with self.lock:
             clock = time.perf_counter()
             audio = np.asarray(self.pipe.decode(edited), dtype=np.float32)
@@ -97,7 +100,12 @@ def handler_for(state: Mixer):
             if self.path == "/api/info":
                 info = {"run": state.run.name if state.run.name != "on-cpu" else f"{state.run.parent.name}/{state.run.name}",
                         "seconds": len(state.latent) / 25, "channels": mixer.CHANNELS,
-                        "mean": state.whole["mean"].round(4).tolist(), "std": state.whole["std"].round(4).tolist()}
+                        "mean": state.whole["mean"].round(4).tolist(), "std": state.whole["std"].round(4).tolist(),
+                        "directions": 0 if state.basis is None else 12,
+                        "direction_variance": [] if state.basis is None else state.basis["variance"][:12].round(4).tolist(),
+                        "direction_top": [] if state.basis is None else [
+                            [[int(c), round(float(state.basis["components"][k][c]), 2)] for c in np.argsort(-np.abs(state.basis["components"][k]))[:3]]
+                            for k in range(12)]}
                 return self.send(200, json.dumps(info).encode(), "application/json")
             self.send(404, b"not found", "text/plain")
 

@@ -10,6 +10,7 @@
     bin/microscope.py annotate RUN --step 4 --predicted vocal_present=true
     bin/microscope.py annotate RUN --phrase verse.1.2 good
     bin/microscope.py noise-seeds RUN --seeds 1,2,3,4          same tokens, different acoustic noise
+    bin/microscope.py reference-blend RUN --reference FILE --starts 8,16,24   start from another song
     bin/microscope.py noise-variants RUN --variants same,flip,reverse   the take's own noise, transformed
     bin/microscope.py envelopes RUN                           phase-insensitive similarity, every audio set
     bin/microscope.py bands RUN                               per-band correlation with the final, per step
@@ -400,6 +401,68 @@ def cmd_noise_variants(args):
     return 0
 
 
+def cmd_reference_blend(args):
+    """Solve a take's own tokens starting partway, from a blend of its noise and another song.
+
+    The reference recording is converted to 48 kHz stereo (ffmpeg), cut to the
+    take's length from --ref-start, and encoded with the VAE's encoder. For each
+    start step k the solve begins at flow time t = 1 - k/steps from
+    t * (the take's own noise) + (1 - t) * (reference latent): the state a solve
+    of the reference itself would pass through at step k. Larger k keeps more of
+    the reference; k = 0 would be the take. Tokens, plan and seed are the take's.
+    """
+    import subprocess, tempfile, torch
+    from yue2.modeling_vae import YuE2VAE
+    from yue2.nar import song_noise
+    from yue2.pipeline import SemanticResult
+    run = pathlib.Path(args.run).expanduser().resolve()
+    plan, tokens = load_take(run)
+    song, _ = song_for_run(run, args.models)
+    pipe = renderer.build_pipeline(pathlib.Path(args.models), song, progress=not args.quiet)
+    final = decoded_pcm(run / "final" / "audio.wav")
+    frames = len(tokens)
+    reference = pathlib.Path(args.reference).expanduser()
+    with tempfile.TemporaryDirectory() as tmp:
+        wav = pathlib.Path(tmp) / "ref.wav"
+        subprocess.run(["ffmpeg", "-v", "error", "-ss", str(args.ref_start), "-i", str(reference), "-t", str(frames / 25 + 1),
+                        "-ar", str(RATE), "-ac", "2", "-f", "wav", "-c:a", "pcm_f32le", str(wav)], check=True)
+        ref_audio = decoded_pcm(wav)
+    ref_audio = np.pad(ref_audio, ((0, max(0, frames * 1920 - len(ref_audio))), (0, 0)))[:frames * 1920]
+    vae = YuE2VAE.from_pretrained(pathlib.Path(args.models) / "YuE2-Vae", decoder_only=False, device=pipe.device,
+                                  local_files_only=True, profile=pipe.profile)
+    with torch.inference_mode():
+        ref_latent = vae.encode(torch.as_tensor(ref_audio.T[None], dtype=torch.float32)).squeeze(0).T.float().cpu()
+    del vae
+    if hasattr(torch, "mps") and torch.backends.mps.is_available():
+        torch.mps.empty_cache()
+    ref_latent = ref_latent[:frames]
+    noise = song_noise(plan.request.seed, frames)
+    steps = pipe.generation_config.ode_steps
+    out = run / "reference_blends" / reference.stem.split(" [")[0].replace(" ", "_").lower()
+    scope.write_wav(out / "reference.wav", ref_audio, RATE)
+    scope.write_wav(out / "listening" / "reference.wav", scope.listening_copy(ref_audio), RATE, subtype="PCM_16")
+    rows = []
+    for k in [int(k) for k in args.starts.split(",")]:
+        t = 1.0 - k / steps
+        state = t * noise + (1.0 - t) * ref_latent
+        latents = pipe.synthesize(SemanticResult(plan, tokens, {}, False), noise=state, start_step=k)
+        audio = pipe.decode(latents)
+        scope.write_wav(out / f"start_{k:02d}.wav", audio, RATE)
+        scope.write_wav(out / "listening" / f"start_{k:02d}.wav", scope.listening_copy(audio), RATE, subtype="PCM_16")
+        row = {"start_step": k, "reference_share": round(1.0 - t, 4), "pcm_hash": hashes.hash_array(audio),
+               "vs_take": scope.envelope_similarity(audio, final, RATE),
+               "vs_reference": scope.envelope_similarity(audio, ref_audio[:len(audio)], RATE)}
+        rows.append(row)
+        print(f"  start {k:>2} ({row['reference_share']:.0%} reference): envelope vs take {row['vs_take']['envelope']:.3f}, "
+              f"vs reference {row['vs_reference']['envelope']:.3f}", flush=True)
+    scope.write_json(out / "analysis.json", {
+        "reference": str(reference), "ref_start": args.ref_start, "seed": plan.request.seed,
+        "semantic_hash": hashes.hash_tokens(tokens), "steps": steps, "rows": rows,
+        "reference_vs_take": scope.envelope_similarity(ref_audio[:len(final)], final, RATE),
+        "note": "take's tokens solved from a noise/reference blend starting at step k; signal statistics"})
+    return 0
+
+
 def cmd_envelopes(args):
     """Phase-insensitive similarity to the final for every audio set a run holds.
 
@@ -613,6 +676,13 @@ def main():
     c.add_argument("--import", dest="import_file", help="JSON exported by the run's index.html")
     c.add_argument("values", nargs="*", help="key=true|false|null, or free text for --phrase")
     c.set_defaults(fn=cmd_annotate)
+
+    c = sub.add_parser("reference-blend", parents=[common])
+    c.add_argument("run")
+    c.add_argument("--reference", required=True, help="an audio file ffmpeg can read")
+    c.add_argument("--ref-start", type=float, default=0.0, help="seconds into the reference")
+    c.add_argument("--starts", default="8,16,24", help="start steps (of the take's ODE steps)")
+    c.set_defaults(fn=cmd_reference_blend)
 
     c = sub.add_parser("noise-variants", parents=[common])
     c.add_argument("run")

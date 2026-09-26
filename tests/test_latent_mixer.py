@@ -50,3 +50,14 @@ def test_gain_scales_movement_around_the_mean():
 def test_edits_must_cover_every_channel():
     with pytest.raises(ValueError, match="64"):
         mixer.apply(take(), {"offset": [0.0] * 3}, mixer.stats(take()))
+
+
+def test_directions_move_along_the_basis_in_its_own_units():
+    latent, edits = take(), mixer.neutral()
+    basis = {"components": np.eye(64, dtype=np.float32)[::-1].copy(), "std": np.full(64, 0.5, np.float32)}
+    edits["directions"] = [2.0]
+    out = mixer.apply(latent, edits, mixer.stats(latent), basis)
+    assert np.allclose(out[:, 63] - latent[:, 63], 1.0, atol=1e-5)          # direction 0 is channel 63 here
+    assert np.allclose(out[:, :63], latent[:, :63], atol=1e-5)
+    with pytest.raises(ValueError, match="basis"):
+        mixer.apply(latent, edits, mixer.stats(latent))

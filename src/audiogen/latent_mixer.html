@@ -48,11 +48,15 @@ main { padding:16px 20px 40px; display:grid; grid-template-columns:repeat(auto-f
   <div class="stats" id="stats"></div>
   <div class="note">Signal statistics describe the excerpt; they are not a judgement of how it sounds.</div>
 </header>
+<section id="dirs" hidden style="padding:14px 20px 0"><h2 style="font-size:15px;margin:0 0 4px">Directions</h2>
+<div class="sub" style="margin:0 0 8px">Combinations of channels that move together across every take on disk (principal directions), strongest first. Each moves in units of its own spread; the three channels it leans on most are listed.</div>
+<div id="dgrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px"></div></section>
+<h2 style="font-size:15px;margin:16px 20px 0">Channels</h2>
 <main id="grid"></main>
 <script>
 const $ = (id) => document.getElementById(id);
 const N = 64;
-const edits = { offset: Array(N).fill(0), gain: Array(N).fill(1), mute: Array(N).fill(false), solo: Array(N).fill(false), master_gain: 1 };
+const edits = { offset: Array(N).fill(0), gain: Array(N).fill(1), mute: Array(N).fill(false), solo: Array(N).fill(false), master_gain: 1, directions: [] };
 let out = null;                         // listening volume only; never changes what is decoded
 let info, ctx, playing = false, bypass = false, cur = null, inflight = false, dirty = { edited: true, original: true };
 const buffers = { edited: null, original: null }, stats = { edited: null, original: null };
@@ -145,7 +149,8 @@ $('moment').oninput = () => { $('momentv').textContent = (+$('moment').value).to
 $('master').oninput = () => { edits.master_gain = +$('master').value; $('masterv').textContent = (+$('master').value).toFixed(2); changed(); };
 $('master').ondblclick = () => { $('master').value = 1; $('master').oninput(); };
 $('reset').onclick = () => {
-  edits.offset.fill(0); edits.gain.fill(1); edits.mute.fill(false); edits.solo.fill(false); edits.master_gain = 1;
+  edits.offset.fill(0); edits.gain.fill(1); edits.mute.fill(false); edits.solo.fill(false); edits.master_gain = 1; edits.directions.fill(0);
+  document.querySelectorAll('.dv').forEach((x) => { x.value = 0; x.oninput(); });
   document.querySelectorAll('.o').forEach((x) => { x.value = 0; }); document.querySelectorAll('.g').forEach((x) => { x.value = 1; });
   document.querySelectorAll('.ov').forEach((x) => { x.textContent = '0.00'; }); document.querySelectorAll('.gv').forEach((x) => { x.textContent = '1.00'; });
   document.querySelectorAll('.ms button').forEach((x) => x.classList.remove('on'));
@@ -165,6 +170,18 @@ fetch('/api/info').then((r) => r.json()).then((d) => {
   $('start').max = Math.max(0, d.seconds - 5); $('startv').textContent = fmt(+$('start').value);
   $('moment').max = d.seconds - 0.04; $('momentv').textContent = (+$('moment').value).toFixed(2) + ' s';
   for (let i = 0; i < N; i++) $('grid').append(strip(i));
+  if (d.directions) {
+    edits.directions = Array(d.directions).fill(0); $('dirs').hidden = false;
+    for (let k = 0; k < d.directions; k++) {
+      const el = document.createElement('div'); el.className = 'ch';
+      el.innerHTML = `<div class="top"><span class="n">dir ${k}</span><span style="color:var(--muted);font-size:11px">${(d.direction_variance[k] * 100).toFixed(1)}% · ${d.direction_top[k].map(([c, w]) => (w >= 0 ? '+' : '−') + 'ch' + c).join(' ')}</span></div>
+        <div class="row"><span>move</span><input type="range" class="dv" min="-4" max="4" step="0.05" value="0"><span class="v">0.00</span></div>`;
+      const r = el.querySelector('.dv');
+      r.oninput = () => { edits.directions[k] = +r.value; el.querySelector('.v').textContent = (+r.value).toFixed(2); el.classList.toggle('changed', +r.value !== 0); changed(); };
+      r.ondblclick = () => { r.value = 0; r.oninput(); };
+      $('dgrid').append(el);
+    }
+  }
   ctx = new AudioContext(); pump();
 });
 </script>

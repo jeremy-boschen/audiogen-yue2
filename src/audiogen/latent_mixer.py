@@ -17,7 +17,7 @@ def stats(latent: np.ndarray) -> dict:
     return {"mean": latent.mean(axis=0), "std": latent.std(axis=0)}
 
 
-def apply(latent: np.ndarray, edits: dict, whole: dict) -> np.ndarray:
+def apply(latent: np.ndarray, edits: dict, whole: dict, basis: dict | None = None) -> np.ndarray:
     """Return an edited copy of ``latent``; ``whole`` is ``stats`` of the full take.
 
     edits: {"offset": [64] in stds, "gain": [64] around the mean,
@@ -25,6 +25,8 @@ def apply(latent: np.ndarray, edits: dict, whole: dict) -> np.ndarray:
     Solo wins over mute: if any channel is soloed, every other channel is held
     at its mean. Gain scales a channel's movement around its mean; offset then
     shifts it. Master gain scales every channel's movement around its mean.
+    "directions": [K] moves along ``basis``'s principal directions, each in units
+    of that direction's own spread across the takes it was computed from.
     """
     mean, std = whole["mean"], whole["std"]
     out = latent.astype(np.float32, copy=True)
@@ -39,6 +41,11 @@ def apply(latent: np.ndarray, edits: dict, whole: dict) -> np.ndarray:
     held = ~solo if solo.any() else mute
     out = mean + (out - mean) * gain * master + offset * std
     out[:, held] = mean[held]
+    moves = np.asarray(edits.get("directions") or [], np.float32)
+    if moves.size:
+        if basis is None or len(moves) > len(basis["components"]):
+            raise ValueError("direction edits need a basis with that many directions")
+        out = out + (moves * basis["std"][:len(moves)]) @ basis["components"][:len(moves)]
     return out.astype(np.float32)
 
 
