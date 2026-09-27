@@ -32,8 +32,18 @@
   const zOfHz = (f) => (0.5 - lf(f)) * DEPTH;
   const xOfSec = (s) => (s / D.seconds - 0.5) * W;
   // Five plain-named pitch bands: a ruler at the end of the land, and an optional tint across it.
-  const PITCH = [['bass', 40, 250, '#ff7a59'], ['body', 250, 1000, '#ffc15e'], ['voice & lead', 1000, 4000, '#7fe0b4'],
-                 ['bite', 4000, 10000, '#5cb8ff'], ['air', 10000, 16000, '#c49bff']];
+  const PITCH = [
+    ['bass', 40, 250, '#ff7a59', 'Kick drum, bass guitar and the bottom of the piano: what you feel as much as hear.', 'Fundamentals of the low instruments; most of the energy in a mix.'],
+    ['body', 250, 1000, '#ffc15e', 'The warmth and weight of voices, guitars and keys. Too much of it sounds muddy.', 'Low-mid fundamentals and their first harmonics.'],
+    ['voice & lead', 1000, 4000, '#7fe0b4', 'Where the ear is most sensitive: the heart of the singing, the melody, and what makes words understandable.', 'Vowel formants; the ear\'s most sensitive range.'],
+    ['bite', 4000, 10000, '#5cb8ff', 'Consonants like s and t, the snap of a snare, the attack of cymbals.', 'Sibilance and transients.'],
+    ['air', 10000, 16000, '#c49bff', 'Breath, shimmer and sparkle. Static hisses loudest up here, so it is the last to clear.', 'The top octave; noise dominates it early in the solve.'],
+  ];
+  const hzText = (f) => (f >= 1000 ? `${f / 1000}k` : `${f}`);
+  PITCH.forEach(([name, lo, hi, , plain, tech], i) => { EX.GLOSSARY[`hz${i}`] = [`${hzText(lo)}–${hzText(hi)} Hz · ${name}`, plain, tech]; });
+  const bandOf = (hz) => Math.max(0, PITCH.findIndex(([, , hi]) => hz < hi));
+  let hoverBand = -1;
+
 
   const st = EX.stage(document.getElementById('stage'), { bloom: 0.45, radius: 0.45, threshold: 0.6 });
   const { scene, camera, controls } = st;
@@ -91,9 +101,7 @@
     uState: { value: arrayTex(state) }, uPred: { value: arrayTex(pred) },
     uSetS: { value: settleTex(settleS) }, uSetP: { value: settleTex(settleP) },
     uStep: { value: 0 }, uSteps: { value: S }, uMix: { value: 0 }, uFin: { value: 0 },
-    uH: { value: H }, uTime: { value: 0 }, uPlayX: { value: -W / 2 }, uSettleOn: { value: 1 }, uBands: { value: 0 },
-    uBandZ: { value: new T.Vector4(...PITCH.slice(1).map(([, lo]) => zOfHz(lo))) },
-    uBandC: { value: PITCH.map(([, , , c]) => new T.Color(c)) },
+    uH: { value: H }, uTime: { value: 0 }, uPlayX: { value: -W / 2 }, uSettleOn: { value: 1 },
     uTexel: { value: new T.Vector2(1 / C, 1 / B) }, uBg: { value: new T.Color(EX.PALETTE.bg) },
     uHoverZ: { value: -999 }, uLift: { value: 0 }, uGhostMix: { value: 1 }, uAlpha: { value: 1 },
   };
@@ -132,7 +140,7 @@
       gl_Position = projectionMatrix * mv;
     }`;
   const FRAG_COMMON = `
-    uniform float uTime, uPlayX, uSettleOn, uHoverZ, uAlpha, uBands; uniform vec3 uBg; uniform vec4 uBandZ; uniform vec3 uBandC[5];
+    uniform float uTime, uPlayX, uSettleOn, uHoverZ, uAlpha; uniform vec3 uBg;
     varying float vH; varying float vSettle; varying vec3 vN; varying vec3 vW; varying float vDist;
     ${EX.GLSL_RAMP}
     float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
@@ -155,12 +163,6 @@
       col += vec3(1.0, 0.86, 1.0) * exp(-d * d * 1.6) * 1.35;
       col += base * exp(-abs(d) * 0.18) * 0.22 * step(d, 0.0);
       float hz = vW.z - uHoverZ; col += vec3(0.5, 0.7, 1.0) * exp(-hz * hz * 3.0) * 0.35;
-      if (uBands > 0.001) {                         // pitch bands: tint each lane in its band's color
-        float z = vW.z;
-        vec3 bc = z > uBandZ.x ? uBandC[0] : z > uBandZ.y ? uBandC[1] : z > uBandZ.z ? uBandC[2] : z > uBandZ.w ? uBandC[3] : uBandC[4];
-        float lum = dot(col, vec3(0.3, 0.55, 0.15));
-        col = mix(col, bc * (0.25 + lum * 1.6), 0.7 * uBands);
-      }
       float fog = 1.0 - exp(-pow(vDist * 0.0036, 2.0));
       return mix(col, uBg, fog);
     }`;
@@ -261,12 +263,23 @@
   const L = EX.labels(st.host, camera);
   for (let s = 0; s <= D.seconds + 0.01; s += 20) L.add(`${s}s`, new T.Vector3(xOfSec(s), 0, TIME_Z + 3));
   L.add('time →', new T.Vector3(W / 2 + 10, 0, TIME_Z), 'tick big');
-  PITCH.forEach(([name, lo, hi, color]) => {
+  // Hz bands: a see-through colored layer floating just above the noise, one strip per band across the whole land,
+  // like the ghost. Their labels stand by the settling wall, whose bars take the band colors while it is on.
+  const ROOF_Y = H * 1.15;
+  const bandRoof = PITCH.map(([, lo, hi, color]) => {
     const z0 = zOfHz(lo), z1 = zOfHz(hi);
-    const bar = new T.Mesh(new T.PlaneGeometry(3, Math.abs(z0 - z1) - 0.4), new T.MeshBasicMaterial({ color, transparent: true, opacity: 0.85, toneMapped: false }));
-    bar.rotation.x = -Math.PI / 2; bar.position.set(W / 2 + 4, 0.05, (z0 + z1) / 2); scene.add(bar);
-    const el = L.add(name, new T.Vector3(W / 2 + 8, 0, (z0 + z1) / 2), 'tick band').el;
-    el.style.setProperty('--c', color);
+    const m = new T.Mesh(new T.PlaneGeometry(W, Math.abs(z0 - z1) - 0.35),
+      new T.MeshBasicMaterial({ color, transparent: true, opacity: 0, depthWrite: false, blending: T.AdditiveBlending, side: T.DoubleSide, toneMapped: false }));
+    m.rotation.x = -Math.PI / 2; m.position.set(0, ROOF_Y, (z0 + z1) / 2); m.visible = false; scene.add(m);
+    return m;
+  });
+  const bandLabels = PITCH.map(([name, lo, hi, color], i) => {
+    const el = L.add(`<dfn data-g="hz${i}">${hzText(lo)}–${hzText(hi)} Hz</dfn> <span>${name}</span>`,
+      new T.Vector3(wallX - 3, 0, (zOfHz(lo) + zOfHz(hi)) / 2), 'tick hzband').el;
+    el.style.setProperty('--c', color); el.dataset.g = `hz${i}`;      // the whole label opens its card
+    el.addEventListener('pointerenter', () => { hoverBand = i; });
+    el.addEventListener('pointerleave', () => { hoverBand = -1; });
+    return el;
   });
   L.add(EX.g('settling', 'settling wall'), new T.Vector3(wallX, 15, DEPTH / 2 + 2), 'tick big');
   (D.sections || []).forEach((s) => {
@@ -848,18 +861,18 @@
   }
   st.canvas.addEventListener('pointermove', (e) => {
     const p = pick(e);
-    if (!p || e.buttons) { tip.hide(); uniforms.uHoverZ.value = -999; return; }
+    if (!p || e.buttons) { tip.hide(); uniforms.uHoverZ.value = -999; hoverBand = -1; return; }
     const s = Math.round(ui.target), at = (arr, k) => arr[k * B * C + p.b * C + p.c] / 255;
     const [lo, hi] = D.range_log10, db = (v) => ((lo + v * (hi - lo)) * 10 - hi * 10).toFixed(0);
     uniforms.uHoverZ.value = bandZ[p.b];
-    const band = PITCH.find(([, lo, hi]) => D.band_lo_hz[p.b] < hi) || PITCH[PITCH.length - 1];
+    const band = PITCH[bandOf(D.band_lo_hz[p.b])]; hoverBand = ui.bands ? bandOf(D.band_lo_hz[p.b]) : -1;
     tip.show(`<b>${fmt(p.sec)}</b> into the song · <b>${band[0]}</b> <span class="m">(${Math.round(D.band_lo_hz[p.b])}–${Math.round(D.band_hi_hz[p.b])} Hz)</span><br>
       <span class="m">loudness here at step ${s}, in dB below the loudest point:</span><br>
       now ${db(at(state, s))} · predicted ${db(at(pred, s))} · finished ${db(at(state, S))}<br>
       <span class="m">how closely it already moves like the finished song (1 = exactly):</span> ${num(settleS[s * B + p.b] / 255, 2)}<br>
       <span class="m">click to play from here</span>`, e.clientX, e.clientY);
   });
-  st.canvas.addEventListener('pointerleave', () => { tip.hide(); uniforms.uHoverZ.value = -999; });
+  st.canvas.addEventListener('pointerleave', () => { tip.hide(); uniforms.uHoverZ.value = -999; hoverBand = -1; });
   st.canvas.addEventListener('pointerdown', (e) => { downAt = [e.clientX, e.clientY]; });
   st.canvas.addEventListener('pointerup', (e) => {
     if (!downAt || Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) > 4) return;
@@ -881,7 +894,11 @@
     ui.mixT += (mixGoal - ui.mixT) * k; ui.finT += (finGoal - ui.finT) * k;
     uniforms.uStep.value = ui.shown; uniforms.uMix.value = ui.mixT; uniforms.uFin.value = ui.finT;
     uniforms.uSettleOn.value += ((ui.settle ? 1 : 0) - uniforms.uSettleOn.value) * k;
-    uniforms.uBands.value += ((ui.bands ? 1 : 0) - uniforms.uBands.value) * k;
+    bandRoof.forEach((m, i) => {
+      const want = ui.bands ? (hoverBand === i ? 0.34 : hoverBand >= 0 ? 0.07 : 0.14) : 0;
+      m.material.opacity += (want - m.material.opacity) * k; m.visible = m.material.opacity > 0.004;
+    });
+    bandLabels.forEach((el, i) => el.classList.toggle('hot', hoverBand === i));
     uniforms.uTime.value = reduced ? 0 : now;
     ghostUniforms.uGhostMix.value = ui.mode === 1 ? 0 : 1;
     ghostUniforms.uAlpha.value += ((ui.ghost ? 0.3 : 0) - ghostUniforms.uAlpha.value) * k;
@@ -902,6 +919,7 @@
       m4.makeScale(2.2, 0.3 + Math.max(0, v) * 13, bandGap); m4.setPosition(wallX, 0, bandZ[b]);
       wall.setMatrixAt(b, m4);
       const c = rampJS(0.15 + 0.85 * Math.pow(Math.max(0, v), 1.5)); wall.setColorAt(b, col.setRGB(c[0] * 0.75, c[1] * 0.75, c[2] * 0.75));
+      if (ui.bands) { const hb = bandOf(D.band_lo_hz[b]); wall.setColorAt(b, col.set(PITCH[hb][3]).multiplyScalar((0.35 + 0.65 * Math.max(0, v)) * (hoverBand < 0 || hoverBand === hb ? 1 : 0.4))); }
     }
     wall.instanceMatrix.needsUpdate = true; wall.instanceColor.needsUpdate = true;
 

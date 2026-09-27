@@ -31,10 +31,13 @@ kbd { font: 600 10.5px -apple-system, sans-serif; border: 1px solid var(--line);
                 color: rgba(200, 212, 235, .72); white-space: nowrap; text-shadow: 0 0 6px #0a0f1c, 0 0 2px #0a0f1c; }
 .labels .tick.hz { font: 600 10.5px -apple-system, sans-serif; color: #f2f5fc; padding: 1px 6px; border-radius: 5px;
                    background: rgba(60, 78, 120, .45); border: 1px solid rgba(190, 215, 255, .28); }
-.labels .tick.band { transform: translate(0, -50%); font: 600 10.5px -apple-system, sans-serif; color: #eef2fb;
-                     padding-left: 7px; border-left: 3px solid var(--c); }
 .labels .tick.arr { font: 600 10.5px -apple-system, sans-serif; color: #fff; letter-spacing: .04em; text-shadow: 0 1px 4px rgba(10, 15, 28, .9); }
 .labels .tick.side { transform: translate(-100%, -50%); color: var(--muted); }
+.labels .tick.hzband { transform: translate(-100%, -50%); font: 600 10.5px -apple-system, sans-serif; color: #eef2fb;
+                       padding-right: 7px; border-right: 3px solid var(--c); pointer-events: auto; transition: color .15s; }
+.labels .tick.hzband span { color: var(--muted); font-weight: 500; }
+.labels .tick.hzband.hot { color: #fff; text-shadow: 0 0 10px var(--c); }
+.labels .tick.hzband.hot span { color: var(--c); }
 .labels .tick.big { font: 600 11px -apple-system, sans-serif; letter-spacing: .14em; text-transform: uppercase; color: #dfe6f5; }
 .labels .tick.sec { font: 600 11px -apple-system, sans-serif; letter-spacing: .08em; color: #fff; padding: 2px 7px;
                     border-radius: 6px; background: rgba(13, 20, 36, .7); border: 1px solid rgba(155, 107, 255, .45); }
