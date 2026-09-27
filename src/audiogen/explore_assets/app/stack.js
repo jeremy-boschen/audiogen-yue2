@@ -255,7 +255,32 @@
   notes.push(`Song-level notes/syllable ${num(D.song.notes_per_syllable, 3)} (${D.song.melody_notes} notes, ~${D.song.syllables} syllables).`);
   $('datanote').innerHTML = notes.join('<br>');
 
-  const player = new Audio(); player.preload = 'auto'; player.src = D.audio;
+  // Played from a decoded buffer, not an <audio> element: seeking a media element needs the server to
+  // honour byte ranges, and a plain static server that ignores them sends every phrase back to 0:00.
+  const player = (() => {
+    let ctx = null, buffer = null, loading = null, source = null, startedAt = 0, offset = 0;
+    const load = () => loading || (loading = fetch(D.audio).then((r) => r.arrayBuffer())
+      .then((bytes) => { ctx = ctx || new (window.AudioContext || window.webkitAudioContext)(); return ctx.decodeAudioData(bytes); })
+      .then((b) => (buffer = b)));
+    load().catch(() => null);
+    const api = {
+      get paused() { return !source; },
+      get currentTime() { return source ? offset + ctx.currentTime - startedAt : offset; },
+      pause() { if (source) { offset = api.currentTime; source.onended = null; source.stop(); source = null; } },
+      async playAt(t) {
+        api.pause(); offset = t;
+        ctx = ctx || new (window.AudioContext || window.webkitAudioContext)();
+        if (ctx.state === 'suspended') ctx.resume();          // resumed inside the click that asked for sound
+        const want = ++api.ask; await load();
+        if (want !== api.ask) return;                         // a later click won while this one loaded
+        source = ctx.createBufferSource(); source.buffer = buffer; source.connect(ctx.destination);
+        source.onended = () => { source = null; };
+        startedAt = ctx.currentTime; source.start(0, Math.min(t, buffer.duration));
+      },
+      ask: 0,
+    };
+    return api;
+  })();
   let stopAt = null, current = null, locked = null;
   function playPhrase(p) {
     current = p; locked = p.start + 0.01;
@@ -263,28 +288,26 @@
     items[p.i].scrollIntoView({ block: 'nearest', behavior: reduced ? 'auto' : 'smooth' });
     showMoment(p.start + 0.01);
     if (p.start >= D.seconds) { player.pause(); $('moment').insertAdjacentHTML('beforeend', '<div class="chip warn" style="margin-top:6px">in the score, but after the audio ends — nothing to play</div>'); return; }
-    player.pause();                                         // paused before seeking, never seek while playing
-    player.currentTime = p.start;
     stopAt = Math.min(D.seconds, p.start + (p.seconds || 4) + 0.4);
-    player.play().catch(() => null);
+    player.playAt(p.start).catch(() => null);
   }
   function playFrom(t) {
     const p = phraseAt(t);
     if (p) return playPhrase(p);
     current = null; locked = t; showMoment(t);
     if (t >= D.seconds) return;
-    player.pause(); player.currentTime = t; stopAt = Math.min(D.seconds, t + 4); player.play().catch(() => null);
+    stopAt = Math.min(D.seconds, t + 4); player.playAt(t).catch(() => null);
   }
   function showMoment(t) {
     const s = secOf(t), p = phraseAt(t), frame = Math.floor(t * D.semantic.rate);
     $('beamtime').textContent = `${fmt(t)} score time`;
     const tok = frame < ids.length ? `token <b>${ids[frame]}</b> at frame ${frame}${frame > 0 && ids[frame] === ids[frame - 1] ? ' (repeat of the previous)' : ''}` : 'past the last token';
     $('moment').innerHTML = `
-      <div style="margin-bottom:6px">${s ? `<span class="chip">${s.label}</span>` : ''} ${p && p.bin ? `<span class="chip">${p.notes_per_syllable.toFixed(2)} notes/syllable · ${p.bin}</span>` : ''}</div>
-      ${p ? `<div class="lyric ${p.lyrics ? '' : 'none'}">${p.lyrics || 'no lyric line paired with this phrase'}</div>
-             <div class="note">phrase ${p.number} of the ${p.section}: ${p.melody_notes} notes, ~${p.syllables} syllables, ${num(p.seconds, 1)} s</div>`
-          : '<div class="note">no sung phrase here in the score</div>'}
-      <div class="note" style="margin-top:6px">semantic: ${tok}<br>latent: ${frame < LF ? `frame ${frame} of ${LF}` : 'past the end'} · audio: ${t < D.seconds ? fmt(t) : 'ended at ' + fmt(D.seconds)}</div>`;
+      <div class="m-chips">${s ? `<span class="chip">${s.label}</span>` : ''} ${p && p.bin ? `<span class="chip">${p.notes_per_syllable.toFixed(2)} notes/syllable · ${p.bin}</span>` : ''}</div>
+      <div class="m-lyric lyric ${p && p.lyrics ? '' : 'none'}">${p ? p.lyrics || 'no lyric line paired with this phrase' : 'no sung phrase here in the score'}</div>
+      <div class="m-line note">${p ? `phrase ${p.number} of the ${p.section}: ${p.melody_notes} notes, ~${p.syllables} syllables, ${num(p.seconds, 1)} s` : ''}</div>
+      <div class="m-line note" style="margin-top:6px">semantic: ${tok}</div>
+      <div class="m-line note">latent: ${frame < LF ? `frame ${frame} of ${LF}` : 'past the end'} · audio: ${t < D.seconds ? fmt(t) : 'ended at ' + fmt(D.seconds)}</div>`;
     setBeam(t, p);
   }
   function setBeam(t, p) {
