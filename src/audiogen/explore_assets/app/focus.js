@@ -509,7 +509,7 @@
       + (LOCAL || !(Object.keys(HEARD.state).length || Object.keys(HEARD.predicted).length) ? '' : '<button class="linkbtn" id="clearmarks">Clear my marks</button>')
       + HEARD.fields.map(([f, label]) => `<button class="markchip${now[f] === true ? ' on' : ''}" data-f="${f}">${label}</button>`).join('');
     const clear = box.querySelector('#clearmarks');
-    if (clear) clear.onclick = () => { HEARD.state = {}; HEARD.predicted = {}; localStorage.removeItem(STORE); drawMarks(); drawMarker(); drawGame(); };
+    if (clear) clear.onclick = clearMine;
     box.querySelectorAll('.markchip').forEach((b) => (b.onclick = () => mark(view, s, b.dataset.f, now[b.dataset.f] === true ? null : true)));
   }
   function mark(view, step, field, value) {
@@ -541,6 +541,10 @@
     });
     mark(view, step, field, true);
   }
+  function clearMine() {                               // a visitor's own marks only; the machines' stay
+    HEARD.state = {}; HEARD.predicted = {}; localStorage.removeItem(STORE);
+    drawMarks(); drawMarker(); drawGame();
+  }
   function drawGame() {
     const box = $('game');
     box.hidden = !canMark || ui.mode === 2;
@@ -557,8 +561,10 @@
       if (mine === undefined) return `<button class="gamepill" data-f="${f}">I hear ${what}</button>`;
       const vs = them === undefined ? '' : mine < them ? ` · ${them - mine} before the machine` : mine > them ? ` · ${mine - them} after the machine` : ' · same as the machine';
       return `<button class="gamepill got" data-f="${f}" title="Tap to move it to step ${s}">${what} <b>step ${mine}</b>${vs}</button>`;
-    }).join('');
-    $('gamepills').querySelectorAll('.gamepill').forEach((b) => (b.onclick = () => {
+    }).join('') + (!LOCAL && done ? '<button class="gamepill again" id="gameagain" title="Clear your marks and start from step 0">↺ Try again</button>' : '');
+    const again = $('gamepills').querySelector('#gameagain');
+    if (again) again.onclick = () => { clearMine(); if (ui.animating) $('resolve').click(); setStep(0); };
+    $('gamepills').querySelectorAll('.gamepill:not(.again)').forEach((b) => (b.onclick = () => {
       claim(view, b.dataset.f, Math.round(ui.target));
       b.classList.add('pop');
     }));

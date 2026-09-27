@@ -138,6 +138,8 @@ kbd { font: 600 10.5px -apple-system, sans-serif; border: 1px solid var(--line);
                 box-shadow: 0 0 24px rgba(255, 217, 143, .45); font-weight: 550; }
 .gamepill.got b { font-weight: 750; }
 .gamepill.pop { animation: gamepop .5s ease-out; }
+.gamepill.again { animation: none; border-color: rgba(255, 255, 255, .25); color: var(--muted); font-weight: 550; }
+.gamepill.again:hover { color: #fff; }
 @keyframes gamebreathe { 0%, 100% { box-shadow: 0 0 0 0 rgba(143, 216, 255, .0), 0 8px 30px rgba(0,0,0,.35); }
                          50% { box-shadow: 0 0 22px 2px rgba(143, 216, 255, .45), 0 8px 30px rgba(0,0,0,.35); } }
 @keyframes gamepop { 0% { transform: scale(1.18); } 100% { transform: scale(1); } }
