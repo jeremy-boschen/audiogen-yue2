@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="author" content="Jeremy Boschen">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Coming into focus · Microscope</title>
+<link rel="stylesheet" href="explore.css">
+</head>
+<body>
+<div class="stage" id="stage"><div class="vignette"></div></div>
+
+<div class="hero">
+  <div class="kicker">Generation microscope · from noise to song</div>
+  <h1>Coming into focus</h1>
+  <p>In this take the model refines the sound of the whole song together, starting from random noise, over 32
+     <dfn data-g="step">steps</dfn>. Here it is at every step: time runs left to right, frequency front to back, level up.
+     Press <em>Resolve</em> and hear it come through.</p>
+</div>
+
+<div class="prep" id="prep" aria-live="polite">
+  <div class="preptitle">Preparing the song</div>
+  <div class="preptrack"><div class="prepbar" id="prepbar"></div></div>
+  <div class="prepsub"><span id="preptext">starting…</span> · every step's audio, downloaded before it plays</div>
+</div>
+
+<aside class="panel right compact" id="panel">
+  <div class="ringwrap">
+    <svg class="ring" id="ring" viewBox="0 0 150 150" data-help="<b>The 32 steps.</b> At this stage the model works on the whole song together: it starts from random noise and refines all of it a little at every step, like a photo developing. Step 0 on the dial is the starting noise. Drag the ring or press <kbd>←</kbd> <kbd>→</kbd> to stop at any step and listen. A colored dot marks each step where you heard something come in.&lt;small class=&quot;tech&quot;&gt;Flow matching: 32 midpoint steps from t = 1 to t = 0, two network evaluations each; 33 saved states.&lt;/small&gt;"></svg>
+    <div class="stepinfo">
+      <div class="big" id="stepbig">0</div>
+      <div class="sub" id="stepsub"></div>
+      <div class="row" style="margin-top:10px">
+        <button class="btn primary resolvebtn" id="resolve" data-help="<b>Resolve</b> plays the whole process for you: the song plays while the steps run from noise to finished, about one step every two seconds, so step 32 arrives just before the last chorus. This is a pace chosen for listening, not how long the model took. <kbd>A</kbd>">▶ Resolve <kbd>A</kbd></button>
+        <button class="btn listenbtn" id="play" data-help="<b>Listen to this step</b>: play the song as it sounds at the step on the dial. Leave it playing and change steps: the sound switches in place, so you hear exactly what one step changes. <kbd>space</kbd>">▶ Listen to this step</button>
+      </div>
+      <div class="sub" id="audiostatus" aria-live="polite"></div>
+      <div class="sub switching" id="switchstatus" aria-live="polite"></div>
+    </div>
+  </div>
+  <input type="range" id="slider" min="0" max="32" step="1" value="0" aria-label="Step" data-help="<b>Move through the steps.</b> Step 0 is the starting noise; step 32 is the finished song. The sound follows as you drag.">
+  <div class="viewrow">
+    <div class="seg" id="modes">
+      <button data-mode="0" data-help="<b>State</b>: the song as it is at this step, noise and all. Early on it's mostly noise with the song faint underneath. <kbd>1</kbd>&lt;small class=&quot;tech&quot;&gt;x_t at this step, decoded to audio.&lt;/small&gt;">State</button>
+      <button data-mode="1" data-help="<b>Predicted</b>: a quick guess at the finished song, made from this step by jumping straight to the end. It is often recognizable surprisingly early, but it is only a guess: later steps can end up somewhere else. <kbd>2</kbd>&lt;small class=&quot;tech&quot;&gt;x̂₀ = x_t − t·v: the current velocity extrapolated to t = 0, decoded.&lt;/small&gt;">Predicted</button>
+      <button data-mode="2" data-help="<b>Finished</b>: the end result, step 32, to compare against. <kbd>3</kbd>">Finished</button>
+    </div>
+    <button class="icon" id="ghost" data-help="<b>Ghost</b>: a see-through outline of the other view, raised above the land so both stay visible. The outline is raised for visibility, so the space between them is not a measure of remaining error; compare their shapes. <kbd>G</kbd>&lt;small class=&quot;tech&quot;&gt;The other view as contour lines, lifted 7 units; both surfaces use the same nonlinear height scale.&lt;/small&gt;" aria-label="Ghost overlay">
+      <svg viewBox="0 0 20 20"><path d="M3 13 L7 9 L10 11 L17 5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-dasharray="2 2"/><path d="M3 16 L7 12 L10 14 L17 9" fill="none" stroke="currentColor" stroke-width="1.8"/></svg></button>
+    <button class="icon" id="settlebtn" data-help="<b>Comparison color</b>: warmer color shows a stronger resemblance between a band's rise and fall across the song and the final step's; frost teal and glitter mean less alike. The color blends in gradually from about 0.45 similarity. It does not mean a sound is finished, and it isn't the model's confidence. <kbd>C</kbd>&lt;small class=&quot;tech&quot;&gt;Whole-song correlation of each band's level envelope with step 32's.&lt;/small&gt;" aria-label="Comparison color">
+      <svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="6.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M10 3.5 A6.5 6.5 0 0 1 10 16.5 Z" fill="currentColor"/></svg></button>
+    <button class="icon" id="bandsbtn" aria-label="Hz bands" data-help="<b>Hz bands</b>: a see-through colored layer over the land, one strip per range of frequencies, from bass at the front to air at the back. Point at a band, on the land or by the settling wall, to light it up and see what usually lives there. Instruments spread across many bands. <kbd>B</kbd>&lt;small class=&quot;tech&quot;&gt;Log-spaced bands, 40 Hz to 16 kHz.&lt;/small&gt;">
+      <svg viewBox="0 0 20 20"><rect x="3" y="4" width="14" height="2.4" rx="1.2" fill="#c49bff"/><rect x="3" y="8.8" width="14" height="2.4" rx="1.2" fill="#7fe0b4"/><rect x="3" y="13.6" width="14" height="2.4" rx="1.2" fill="#ff7a59"/></svg></button>
+  </div>
+  <button class="btn" id="markbtn" hidden title="Mark what you can hear at this step (M)">Mark what I hear <kbd>M</kbd></button>
+  <div class="marker" id="marker" hidden></div>
+
+  <h3>This step in numbers</h3>
+  <div id="metrics" class="tiles"></div>
+
+  <h3>Similarity to the final step, by Hz band <small>click to jump</small></h3>
+  <div class="bars" id="bands"></div>
+  <canvas id="settlemap" data-help="<b>Similarity to the final step, by Hz band.</b> Each row is a frequency band, bass at the bottom and air at the top; each column is a step. Brighter means that band's rise and fall across the song is more like the final step's. A tick marks the step after which it stays at 0.9 or above; the band can still change after that. The order differs from take to take. Click to jump to a step.&lt;small class=&quot;tech&quot;&gt;Per-band envelope correlation with step 32's; ticks where it stays at 0.9 or above, a cut-off this page chose.&lt;/small&gt;"></canvas>
+
+  <div class="honest" id="honest" data-help="<b>What these numbers can and can't say.</b> These are measurements of this take's saved latent states and decoded audio. It shows where the signal changes, not what a person hears. Whether you can make out a voice at a step is for your ears, which is what the <b>I hear</b> buttons are for. Preview levels are adjusted for playback (each file to the same peak), so some steps may sound louder than others; web audio is AAC. The numbers come from the original audio and latents."><b>Signal statistics, not listening results.</b> Whether you can hear a voice at a step is for your ears. Preview levels are adjusted for playback; some steps may sound louder.</div>
+  <div class="hoverhelp" id="hoverhelp" aria-live="polite"></div>
+</aside>
+
+<div class="panel dock" id="dock">
+  <div class="time" id="time">0:00.0</div>
+  <div class="scrub" id="scrub"><canvas id="scrubcanvas"></canvas></div>
+</div>
+
+<div class="game" id="game" hidden>
+  <div class="gamecue" id="gamecue"></div>
+  <div class="gamepills" id="gamepills"></div>
+</div>
+<div class="keys"><kbd>space</kbd>play · <kbd>←</kbd><kbd>→</kbd>step · <kbd>1</kbd><kbd>2</kbd><kbd>3</kbd>view · <kbd>G</kbd>ghost · <kbd>C</kbd>color · <kbd>B</kbd>Hz bands ·
+  <kbd>A</kbd>resolve · <kbd>,</kbd><kbd>.</kbd>seek 5 s · <kbd>R</kbd>reset camera · drag to orbit, scroll to zoom, click the land to seek</div>
+
+<script src="vendor/three/three.bundle.js"></script>
+<script src="data/focus.js"></script>
+<script src="app/common.js"></script>
+<script src="app/focus.js"></script>
+</body>
+</html>

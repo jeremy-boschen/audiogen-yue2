@@ -1,0 +1,15 @@
+three@0.186.0 (npm pack three), MIT, see LICENSE.
+three.bundle.js is one classic (non-module) script so the pages work from file://,
+where Chrome refuses ES module imports. It assigns window.THREE = the three
+namespace plus OrbitControls, EffectComposer, RenderPass, UnrealBloomPass,
+OutputPass. Rebuilt with esbuild 0.28.2 from this entry, unmodified sources:
+
+  import * as T from 'three';
+  import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+  import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+  import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+  import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
+  import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
+  window.THREE = Object.assign({}, T, { OrbitControls, EffectComposer, RenderPass, UnrealBloomPass, OutputPass });
+
+  npx esbuild entry.js --bundle --format=iife --minify --legal-comments=eof --outfile=three.bundle.js

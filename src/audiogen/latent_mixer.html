@@ -1,0 +1,205 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Latent mixer</title>
+<style>
+:root { --bg:#0b1020; --panel:#121a30; --raised:#18223d; --line:#26304f; --text:#e8ecf6; --muted:#9aa4bd; --faint:#5f6a86;
+        --violet:#9b6bff; --pink:#ff5fb4; --lit:#8fd3ff; --cta:linear-gradient(90deg,#c9b8ff,#ffc2e3); }
+* { box-sizing: border-box; }
+body { margin:0; background:var(--bg); color:var(--text); font:14px/1.45 -apple-system,system-ui,sans-serif; }
+header { position:sticky; top:0; z-index:2; background:rgba(11,16,32,.96); border-bottom:1px solid var(--line); padding:14px 20px 12px; }
+h1 { font-size:18px; margin:0; } .sub { color:var(--muted); font-size:13px; margin:2px 0 10px; }
+.bar { display:flex; flex-wrap:wrap; align-items:center; gap:10px 16px; }
+button { font:inherit; color:var(--text); background:var(--raised); border:1px solid var(--line); border-radius:9px; padding:7px 12px; cursor:pointer; }
+button:hover { border-color:#3a4670; } button.on { background:#2a2150; border-color:var(--violet); }
+#play { background:var(--cta); color:#0a0f1c; border:0; font-weight:600; min-width:92px; }
+label { color:var(--muted); font-size:12.5px; display:inline-flex; align-items:center; gap:8px; }
+input[type=range] { accent-color:#c9b8ff; }
+#start { width:260px; }
+.stats { display:grid; grid-template-columns:auto repeat(6, auto); gap:2px 14px; font-size:12px; color:var(--muted); margin-top:10px; font-variant-numeric:tabular-nums; }
+.stats b { color:var(--text); font-weight:500; } .note { color:var(--faint); font-size:11.5px; margin-top:4px; }
+#busy { width:9px; height:9px; border-radius:50%; background:var(--faint); display:inline-block; } #busy.on { background:var(--pink); box-shadow:0 0 8px var(--pink); }
+main { padding:16px 20px 40px; display:grid; grid-template-columns:repeat(auto-fill, minmax(150px, 1fr)); gap:10px; }
+.ch { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:8px 10px 9px; }
+.ch.changed { border-color:#5b4a9a; } .ch.soloed { border-color:var(--lit); } .ch.muted { opacity:.55; }
+.ch .top { display:flex; justify-content:space-between; align-items:center; margin-bottom:4px; }
+.ch .n { font-weight:600; font-size:13px; } .ch .ms { display:flex; gap:4px; }
+.ch .ms button { padding:1px 7px; font-size:11px; border-radius:6px; }
+.ch .ms button.m.on { background:#4a2a2a; border-color:#ff7a6b; } .ch .ms button.s.on { background:#1d3552; border-color:var(--lit); }
+.ch .row { display:grid; grid-template-columns:34px 1fr 34px; align-items:center; gap:4px; font-size:11px; color:var(--muted); }
+.ch .row input { width:100%; } .ch .v { text-align:right; font-variant-numeric:tabular-nums; color:var(--text); }
+</style>
+<header>
+  <h1>Latent mixer <span id="runname" style="color:var(--muted);font-weight:400"></span></h1>
+  <div class="sub">A loop of the finished take, decoded live from its 64 latent channels. Nobody designed what the channels mean; change one and listen.
+    <b>Offset</b> shifts a channel (in its own standard deviations), <b>gain</b> scales its movement, <b>M</b> holds it at its average, <b>S</b> holds every other channel. Double-click a slider to reset it.</div>
+  <div class="bar">
+    <button id="play">▶ Play</button>
+    <button id="ab" title="B">A/B: hearing edited</button>
+    <label>Excerpt <input id="start" type="range" min="0" max="80" step="0.5" value="30"> <span id="startv"></span></label>
+    <label>Hold <select id="freeze"><option value="">off (the song plays)</option><option value="moment">one moment, as a tone</option><option value="average">the song's average, as a tone</option></select></label>
+    <label id="momentl" hidden>Moment <input id="moment" type="range" min="0" max="80" step="0.04" value="30"> <span id="momentv"></span></label>
+    <label>Length <select id="len"><option>5</option><option selected>10</option><option>20</option></select> s</label>
+    <label>All channels' gain <input id="master" type="range" min="0" max="2" step="0.05" value="1"> <span id="masterv">1.00</span></label>
+    <label>Volume <input id="vol" type="range" min="0" max="1" step="0.01" value="0.4"></label>
+    <button id="reset">Reset all</button>
+    <button id="snap">Snapshot</button>
+    <span id="busy" title="decoding"></span><span id="msg" style="color:var(--muted);font-size:12px"></span>
+  </div>
+  <div class="stats" id="stats"></div>
+  <div class="note">Signal statistics describe the excerpt; they are not a judgement of how it sounds.</div>
+</header>
+<section id="matchsec" hidden style="padding:14px 20px 0"><h2 style="font-size:15px;margin:0 0 4px">Match another recording's sound</h2>
+<div class="sub" style="margin:0 0 8px">Moves each of the 64 channels' average and spread toward the chosen recording's, keeping this take's own movement over time. Averages carry no timing, so the other song's rhythm cannot come through. The first pick of a recording takes a few seconds to encode.</div>
+<div class="bar"><label>Recording <select id="ref"><option value="">none</option></select></label>
+<label>Amount <input id="amount" type="range" min="0" max="1.5" step="0.05" value="0"> <span id="amountv">0%</span></label><span id="refmsg" style="color:var(--muted);font-size:12px"></span></div></section>
+<section id="dirs" hidden style="padding:14px 20px 0"><h2 style="font-size:15px;margin:0 0 4px">Directions</h2>
+<div class="sub" style="margin:0 0 8px">Combinations of channels that move together across every take on disk (principal directions), strongest first. Each moves in units of its own spread; the three channels it leans on most are listed.</div>
+<div id="dgrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px"></div></section>
+<h2 style="font-size:15px;margin:16px 20px 0">Channels</h2>
+<main id="grid"></main>
+<script>
+const $ = (id) => document.getElementById(id);
+const N = 64;
+const edits = { offset: Array(N).fill(0), gain: Array(N).fill(1), mute: Array(N).fill(false), solo: Array(N).fill(false), master_gain: 1, directions: [], match_amount: 0 };
+let out = null;                         // listening volume only; never changes what is decoded
+let info, ctx, playing = false, bypass = false, cur = null, inflight = false, dirty = { edited: true, original: true };
+const buffers = { edited: null, original: null }, stats = { edited: null, original: null };
+
+// --- audio: one looping source at a time, crossfaded in place ---------------------------
+function position() { return cur ? (ctx.currentTime - cur.t0) % cur.buffer.duration : 0; }
+function swap(buffer) {
+  if (!playing || !buffer) return;
+  const at = cur ? position() % buffer.duration : 0;
+  const src = ctx.createBufferSource(), gain = ctx.createGain();
+  if (!out) { out = ctx.createGain(); out.gain.value = +$('vol').value; out.connect(ctx.destination); }
+  src.buffer = buffer; src.loop = true; src.connect(gain).connect(out);
+  const now = ctx.currentTime;
+  gain.gain.setValueAtTime(0, now); gain.gain.linearRampToValueAtTime(1, now + 0.04);
+  src.start(now, at);
+  if (cur) { cur.gain.gain.setValueAtTime(1, now); cur.gain.gain.linearRampToValueAtTime(0, now + 0.04); cur.src.stop(now + 0.06); }
+  cur = { src, gain, buffer, t0: now - at };
+}
+function heard() { return bypass ? buffers.original : buffers.edited; }
+
+// --- decoding: newest settings win, one request in flight -------------------------------
+function request(which) {
+  const body = { start: +$('start').value, seconds: +$('len').value, bypass: which === 'original', edits,
+                 freeze: $('freeze').value || null, moment: +$('moment').value };
+  return fetch('/api/decode', { method: 'POST', body: JSON.stringify(body) }).then(async (r) => {
+    if (!r.ok) throw new Error(await r.text());
+    const s = JSON.parse(r.headers.get('X-Stats'));
+    return { s, buffer: await ctx.decodeAudioData(await r.arrayBuffer()) };
+  });
+}
+async function pump() {
+  if (inflight) return;
+  const which = dirty.edited ? 'edited' : dirty.original ? 'original' : null;
+  if (!which) { $('busy').classList.remove('on'); return; }
+  dirty[which] = false; inflight = true; $('busy').classList.add('on');
+  try {
+    const { s, buffer } = await request(which);
+    buffers[which] = buffer; stats[which] = s;          // newer than what is playing, even if more is on its way
+    if ((which === 'original') === bypass) swap(heard());
+    renderStats();
+  } catch (e) { $('msg').textContent = e.message; }
+  inflight = false; pump();
+}
+function changed(both) { dirty.edited = true; if (both) dirty.original = true; pump(); markStrips(); }
+
+// --- controls ------------------------------------------------------------------------------
+function strip(i) {
+  const el = document.createElement('div'); el.className = 'ch'; el.id = 'ch' + i;
+  el.innerHTML = `<div class="top"><span class="n">ch ${i}</span><span class="ms"><button class="m" title="hold at its average">M</button><button class="s" title="hold every other channel">S</button></span></div>
+    <div class="row"><span>offset</span><input type="range" class="o" min="-3" max="3" step="0.05" value="0"><span class="v ov">0.00</span></div>
+    <div class="row"><span>gain</span><input type="range" class="g" min="0" max="3" step="0.05" value="1"><span class="v gv">1.00</span></div>`;
+  const o = el.querySelector('.o'), g = el.querySelector('.g');
+  o.oninput = () => { edits.offset[i] = +o.value; el.querySelector('.ov').textContent = (+o.value).toFixed(2); changed(); };
+  g.oninput = () => { edits.gain[i] = +g.value; el.querySelector('.gv').textContent = (+g.value).toFixed(2); changed(); };
+  o.ondblclick = () => { o.value = 0; o.oninput(); }; g.ondblclick = () => { g.value = 1; g.oninput(); };
+  el.querySelector('.m').onclick = (e) => { edits.mute[i] = !edits.mute[i]; e.target.classList.toggle('on', edits.mute[i]); changed(); };
+  el.querySelector('.s').onclick = (e) => { edits.solo[i] = !edits.solo[i]; e.target.classList.toggle('on', edits.solo[i]); changed(); };
+  return el;
+}
+function markStrips() {
+  const soloing = edits.solo.some(Boolean);
+  for (let i = 0; i < N; i++) {
+    const el = $('ch' + i);
+    el.classList.toggle('changed', edits.offset[i] !== 0 || edits.gain[i] !== 1);
+    el.classList.toggle('soloed', edits.solo[i]);
+    el.classList.toggle('muted', soloing ? !edits.solo[i] : edits.mute[i]);
+  }
+}
+function renderStats() {
+  const rows = [['', 'level', 'centroid', 'bass <250', 'mid', 'high >4k', 'decode']];
+  for (const k of ['original', 'edited']) {
+    const s = stats[k]; if (!s) continue;
+    rows.push([k, `${s.rms_db.toFixed(1)} dB`, `${Math.round(s.centroid_hz)} Hz`, `${s.bass_db.toFixed(1)} dB`, `${s.mid_db.toFixed(1)} dB`, `${s.high_db.toFixed(1)} dB`, `${s.decode_seconds.toFixed(2)} s`]);
+  }
+  $('stats').innerHTML = rows.map((r, j) => r.map((c, i) => j && i ? `<b>${c}</b>` : `<span>${c}</span>`).join('')).join('');
+}
+function fmt(s) { return `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`; }
+
+$('play').onclick = async () => {
+  ctx = ctx || new AudioContext();
+  if (!playing) { await ctx.resume(); playing = true; cur = null; swap(heard()); $('play').textContent = '■ Stop'; }
+  else { playing = false; if (cur) cur.src.stop(); cur = null; $('play').textContent = '▶ Play'; }
+};
+$('ab').onclick = () => { bypass = !bypass; $('ab').classList.toggle('on', bypass); $('ab').textContent = bypass ? 'A/B: hearing original' : 'A/B: hearing edited'; swap(heard()); };
+$('start').oninput = () => { $('startv').textContent = fmt(+$('start').value); changed(true); };
+$('len').onchange = () => changed(true);
+$('ref').onchange = async () => {
+  $('refmsg').textContent = $('ref').value ? 'encoding…' : ''; $('busy').classList.add('on');
+  const r = await fetch('/api/reference', { method: 'POST', body: JSON.stringify({ name: $('ref').value }) });
+  const j = r.ok ? await r.json() : null;
+  $('refmsg').textContent = j ? (j.reference ? `matched to ${Math.round(j.seconds)} s of it` : '') : await r.text();
+  if (!$('ref').value) { $('amount').value = 0; $('amount').oninput(); } else changed();
+};
+$('amount').oninput = () => { edits.match_amount = $('ref').value ? +$('amount').value : 0; $('amountv').textContent = Math.round(+$('amount').value * 100) + '%'; changed(); };
+$('amount').ondblclick = () => { $('amount').value = 0; $('amount').oninput(); };
+$('vol').oninput = () => { if (out) out.gain.value = +$('vol').value; };
+$('freeze').onchange = () => { $('momentl').hidden = $('freeze').value !== 'moment'; changed(true); };
+$('moment').oninput = () => { $('momentv').textContent = (+$('moment').value).toFixed(2) + ' s'; changed(true); };
+$('master').oninput = () => { edits.master_gain = +$('master').value; $('masterv').textContent = (+$('master').value).toFixed(2); changed(); };
+$('master').ondblclick = () => { $('master').value = 1; $('master').oninput(); };
+$('reset').onclick = () => {
+  edits.offset.fill(0); edits.gain.fill(1); edits.mute.fill(false); edits.solo.fill(false); edits.master_gain = 1; edits.directions.fill(0);
+  $('amount').value = 0; edits.match_amount = 0; $('amountv').textContent = '0%';
+  document.querySelectorAll('.dv').forEach((x) => { x.value = 0; x.oninput(); });
+  document.querySelectorAll('.o').forEach((x) => { x.value = 0; }); document.querySelectorAll('.g').forEach((x) => { x.value = 1; });
+  document.querySelectorAll('.ov').forEach((x) => { x.textContent = '0.00'; }); document.querySelectorAll('.gv').forEach((x) => { x.textContent = '1.00'; });
+  document.querySelectorAll('.ms button').forEach((x) => x.classList.remove('on'));
+  $('master').value = 1; $('masterv').textContent = '1.00'; changed();
+};
+$('snap').onclick = async () => {
+  const r = await fetch('/api/snapshot', { method: 'POST', body: JSON.stringify({ start: +$('start').value, seconds: +$('len').value, edits, freeze: $('freeze').value || null, moment: +$('moment').value }) });
+  $('msg').textContent = r.ok ? 'saved ' + (await r.json()).saved.split('/').slice(-3).join('/') : await r.text();
+};
+addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'SELECT') return;
+  if (e.key === ' ') { e.preventDefault(); $('play').click(); } else if (e.key.toLowerCase() === 'b') $('ab').click();
+});
+
+fetch('/api/info').then((r) => r.json()).then((d) => {
+  info = d; $('runname').textContent = '· ' + d.run;
+  $('start').max = Math.max(0, d.seconds - 5); $('startv').textContent = fmt(+$('start').value);
+  $('moment').max = d.seconds - 0.04; $('momentv').textContent = (+$('moment').value).toFixed(2) + ' s';
+  for (let i = 0; i < N; i++) $('grid').append(strip(i));
+  if (d.references && d.references.length) {
+    $('matchsec').hidden = false;
+    for (const name of d.references) { const o = document.createElement('option'); o.value = name; o.textContent = name.replace(/ \[[^\]]*\]/, '').replace(/\.[^.]+$/, ''); $('ref').append(o); }
+  }
+  if (d.directions) {
+    edits.directions = Array(d.directions).fill(0); $('dirs').hidden = false;
+    for (let k = 0; k < d.directions; k++) {
+      const el = document.createElement('div'); el.className = 'ch';
+      el.innerHTML = `<div class="top"><span class="n">dir ${k}</span><span style="color:var(--muted);font-size:11px">${(d.direction_variance[k] * 100).toFixed(1)}% · ${d.direction_top[k].map(([c, w]) => (w >= 0 ? '+' : '−') + 'ch' + c).join(' ')}</span></div>
+        <div class="row"><span>move</span><input type="range" class="dv" min="-4" max="4" step="0.05" value="0"><span class="v">0.00</span></div>`;
+      const r = el.querySelector('.dv');
+      r.oninput = () => { edits.directions[k] = +r.value; el.querySelector('.v').textContent = (+r.value).toFixed(2); el.classList.toggle('changed', +r.value !== 0); changed(); };
+      r.ondblclick = () => { r.value = 0; r.oninput(); };
+      $('dgrid').append(el);
+    }
+  }
+  ctx = new AudioContext(); pump();
+});
+</script>

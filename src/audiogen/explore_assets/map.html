@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Take map · Microscope</title>
+<link rel="stylesheet" href="explore.css">
+</head>
+<body>
+<div class="stage" id="stage"><div class="vignette"></div></div>
+
+<div class="hero">
+  <div class="kicker">Generation microscope · every take of Burn It Down</div>
+  <h1>Take map</h1>
+  <p>Each point is one finished render. Takes whose spectrogram envelopes move together sit close; different
+     <em>seeds</em> scatter, the same tokens with different <em>noise</em> cluster, and the <em>N-step solves</em>
+     trace a path into the 32-step take. Click a point to hear it.</p>
+</div>
+
+<aside class="panel right" id="panel">
+  <h3>Groups <small>click to show / hide</small></h3>
+  <div class="list" id="groups"></div>
+
+  <h3>Selected <small id="selhint">click a point</small></h3>
+  <div id="sel" class="note">Nothing selected.</div>
+  <div class="row" style="margin-top:8px">
+    <button class="btn round primary" id="play" title="Play / pause (space)">▶</button>
+    <button class="btn" id="keep" title="Switch takes at the same moment (K)">Keep position <kbd>K</kbd></button>
+    <div class="note" id="ptime" style="margin-left:auto;font:600 12px ui-monospace,monospace"></div>
+  </div>
+
+  <h3>Nearest by envelope <small>signal statistic</small></h3>
+  <div class="list" id="near"></div>
+
+  <h3>All takes <small id="count"></small></h3>
+  <div class="list" id="takes"></div>
+
+  <div class="honest"><b>Similarity is a signal statistic, not a listening result.</b> Positions come from the
+    correlation of phase-free spectrogram envelopes over the first 200 s. Close means “energy moves the same way in
+    the same pitch regions at the same times”; it says nothing about which take is better, and axes have no meaning.</div>
+  <div class="note" id="method" style="margin-top:8px"></div>
+</aside>
+
+<div class="keys"><kbd>space</kbd>play / pause · <kbd>←</kbd><kbd>→</kbd>previous / next take · <kbd>K</kbd>keep position ·
+  <kbd>O</kbd>auto-orbit · <kbd>R</kbd>reset camera · drag to orbit, scroll to zoom</div>
+
+<script src="vendor/three/three.bundle.js"></script>
+<script src="data/map.js"></script>
+<script src="app/common.js"></script>
+<script src="app/map.js"></script>
+</body>
+</html>
