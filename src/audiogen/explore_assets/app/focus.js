@@ -15,18 +15,21 @@
     <p>It is the sound, drawn as terrain. <b>Left to right</b> is time through the song. <b>Front to back</b> is pitch: bass at
       the front, the highest sounds at the back. <b>Height</b> is how loud that pitch is at that moment. At step 0 it is flat
       static; by step 32 it is the song.</p>
-    <h3>What to press</h3>
+    `, `
+    <h3 style="margin-top:0">What to press</h3>
     <dl>
-      <div><dt>▶ and the step slider</dt><dd>Press play, then drag the slider (or use ← →) to move between steps while it plays.
-        The sound switches in place.</dd></div>
-      <div><dt>Resolve</dt><dd>Plays the whole process for you: step 0 to 32, with the sound following.</dd></div>
-      <div><dt>State · Predicted final · Finished</dt><dd><b>State</b> is the song exactly as it is at this step: still partly
+      <dt>▶ and the step slider</dt><dd>Press play, then drag the slider (or use ← →) to move between steps while it plays.
+        The sound switches in place.</dd>
+      <dt>Resolve</dt><dd>Plays the whole process for you: step 0 to 32, with the sound following.</dd>
+      <dt>State · Predicted final · Finished</dt><dd><b>State</b> is the song exactly as it is at this step: still partly
         noise until the last few steps. <b>Predicted final</b> is where the model thinks it is heading from here, often
-        recognisable surprisingly early. <b>Finished</b> is the end result.</dd></div>
-      <div><dt>Ghost overlay</dt><dd>A see-through copy of the other view floating above: in State, where it is heading; in
-        Predicted final, where it actually is. The gap is how far it still has to go.</dd></div>
-      <div><dt>Settling colour</dt><dd>Colour means that part of the sound already matches the finished song; cold blue means it
-        is still forming. The low end and the beat tend to lock in first, fine detail last.</dd></div>
+        recognisable surprisingly early. <b>Finished</b> is the end result.</dd>
+      <dt>Ghost overlay</dt><dd>A see-through copy of the other view floating above: in State, where it is heading; in
+        Predicted final, where it actually is. The gap is how far it still has to go.</dd>
+      <dt>Dots on the dial</dt><dd>Where a listener first heard something: the beat, a voice, the words. They come
+        from someone listening, not from a measurement. Click a row below the dial to jump there.</dd>
+      <dt>Settling colour</dt><dd>Colour means that part of the sound already matches the finished song; cold blue means it
+        is still forming. The low end and the beat tend to lock in first, fine detail last.</dd>
     </dl>
     <p style="color:var(--muted)">Drag to turn the view, scroll to zoom, click the land to jump to that moment. Press
       <kbd>?</kbd> to bring this back. The numbers in the side panel measure the signal; they are not verdicts on how it sounds.</p>`);
@@ -428,6 +431,58 @@
   ring.addEventListener('pointerdown', (e) => { ring.setPointerCapture(e.pointerId); ringFrom(e); });
   ring.addEventListener('pointermove', (e) => { if (e.buttons) ringFrom(e); });
 
+  // --- listening marks: the first step at which a listener heard each thing ------------------
+  // Only a person's ears fill these in (the run's analysis/annotations.json); nothing is measured.
+  // Each gets a pulsing dot inside the dial and a row below it. Served locally, M marks a step.
+  const HEARD = D.listening || { fields: [], state: {}, predicted: {} };
+  const LABEL = Object.fromEntries(HEARD.fields);
+  const viewKey = () => (ui.mode === 1 ? 'predicted' : 'state');
+  function firstHeard(view) {
+    const first = {};
+    Object.keys(HEARD[view] || {}).map(Number).sort((a, b) => a - b).forEach((s) => {
+      Object.entries(HEARD[view][s]).forEach(([f, v]) => { if (v === true && first[f] === undefined) first[f] = s; });
+    });
+    const byStep = {};
+    Object.entries(first).forEach(([f, s]) => (byStep[s] = byStep[s] || []).push(LABEL[f] || f));
+    return byStep;
+  }
+  const markLayer = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+  ring.appendChild(markLayer);
+  function drawMarks() {
+    const byStep = firstHeard(viewKey()), now = Math.round(ui.target);
+    markLayer.innerHTML = Object.entries(byStep).map(([s, names]) => {
+      const [x, y] = pt(ang(+s), R - 13);
+      return `<g class="heardmark${+s <= now ? ' reached' : ''}"><circle cx="${x}" cy="${y}" r="3.2"/><title>Step ${s}: ${names.join(', ')}</title></g>`;
+    }).join('');
+    const rows = Object.entries(byStep);
+    $('heard').innerHTML = rows.length
+      ? `<div class="dim">First heard</div>` + rows.map(([s, names]) =>
+          `<button class="heardrow${+s <= now ? ' reached' : ''}" data-step="${s}"><b>${s}</b><span>${names.join(', ')}</span></button>`).join('')
+      : canMark ? '<div class="dim">Nothing marked yet. Play, and press M at the step where you first hear something.</div>' : '';
+    $('heard').querySelectorAll('.heardrow').forEach((b) => (b.onclick = () => setStep(+b.dataset.step)));
+  }
+  const canMark = Boolean(D.annotate) && location.protocol !== 'file:';
+  let marking = false;
+  function drawMarker() {
+    const box = $('marker');
+    box.hidden = !marking;
+    if (!marking) return;
+    if (ui.mode === 2) { box.innerHTML = '<div class="dim">Switch to State or Predicted final to mark a step.</div>'; return; }
+    const s = Math.round(ui.target), view = viewKey(), now = (HEARD[view] || {})[s] || {};
+    box.innerHTML = `<div class="dim">Step ${s}, ${view === 'state' ? 'State' : 'Predicted final'}: tap what you can hear.</div>`
+      + HEARD.fields.map(([f, label]) => `<button class="markchip${now[f] === true ? ' on' : ''}" data-f="${f}">${label}</button>`).join('');
+    box.querySelectorAll('.markchip').forEach((b) => (b.onclick = () => mark(view, s, b.dataset.f, now[b.dataset.f] === true ? null : true)));
+  }
+  function mark(view, step, field, value) {
+    fetch('/api/annotate', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ run: D.annotate, view, step, field, value }) })
+      .then((r) => r.json().then((j) => { if (!r.ok) throw new Error(j.error || r.status); return j; }))
+      .then((j) => { HEARD.state = j.state; HEARD.predicted = j.predicted; drawMarks(); drawMarker(); })
+      .catch((e) => $('marker').insertAdjacentHTML('beforeend', `<div class="dim">Not saved: ${e.message}</div>`));
+  }
+  $('markbtn').hidden = !canMark;
+  $('markbtn').onclick = () => { marking = !marking; $('markbtn').classList.toggle('on', marking); drawMarker(); };
+
   // metrics
   const series = (set, fn) => D.metrics.map((m) => fn(m[set] || {}));
   const meanSettle = (arr, s) => { let t = 0; for (let b = 0; b < B; b++) t += arr[s * B + b]; return t / B / 255; };
@@ -452,6 +507,7 @@
   const bandRows = [...$('bands').querySelectorAll('.b')];
 
   function renderPanel() {
+    drawMarks(); drawMarker();
     const s = Math.round(ui.target);
     const m = D.metrics[s];
     const setName = ui.mode === 1 ? 'predicted' : 'state';
@@ -560,6 +616,7 @@
     else if (k === 'arrowleft') { e.preventDefault(); setStep(ui.target - 1); }
     else if (k === '1' || k === '2' || k === '3') setMode(+k - 1);
     else if (k === 'g') $('ghost').click();
+    else if (k === 'm' && canMark) $('markbtn').click();
     else if (k === 'c') $('settlebtn').click();
     else if (k === 'a') $('resolve').click();
     else if (k === ',') audio.seek(audio.time() - 5);

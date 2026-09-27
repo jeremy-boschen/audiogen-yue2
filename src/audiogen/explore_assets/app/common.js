@@ -242,13 +242,15 @@
 
   // "How to read this": plain words for people who have never seen a diffusion model. It opens by
   // itself the first time a page is visited (remembered per page) and from the ? in the top bar.
-  function help(key, html) {
+  // Two panels side by side: what you are looking at, then what to press.
+  function help(key, about, controls) {
     const card = document.createElement('div');
     card.className = 'helpcard';
     card.setAttribute('role', 'dialog');
     card.setAttribute('aria-label', 'How to read this page');
-    card.innerHTML = `<button class="btn helpclose" aria-label="Close">✕</button>${html}
-      <div class="row" style="margin-top:14px"><button class="btn primary helpgo">Got it</button></div>`;
+    card.innerHTML = `<section class="helppanel">${about}</section>
+      <section class="helppanel"><button class="btn helpclose" aria-label="Close">✕</button>${controls}
+        <div class="row" style="margin-top:16px"><button class="btn primary helpgo">Got it</button></div></section>`;
     document.body.appendChild(card);
     const seen = 'microscope-help-' + key;
     const show = (on) => { card.classList.toggle('on', on); if (!on) { try { localStorage.setItem(seen, '1'); } catch (e) { /* private mode */ } } };

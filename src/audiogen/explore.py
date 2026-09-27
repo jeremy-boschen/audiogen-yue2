@@ -366,7 +366,35 @@ def focus_data(run: Path, out: Path, cache: Path | None = None) -> dict:
                   "predicted": [rel(p, out) for p in pred_listening],
                   "finished": rel(listening[-1], out)},
         "audio_note": "peak-normalised listening copies (-1 dBFS); 'finished' is step 32, which is the take",
+        "listening": listening_marks(run),
+        # Where the local server writes marks (bin/explore.py serve); publish clears it.
+        "annotate": rel(run, out) if (run / "analysis/annotations.json").exists() else None,
     }
+
+
+# What each listening question is called on the page: what a listener hears, in plain words.
+LISTENING_LABELS = {
+    "beat_recognizable": "The beat", "bass_recognizable": "The bass", "harmony_recognizable": "The chords",
+    "vocal_present": "A voice", "vocal_melody_recognizable": "The melody", "words_partially_intelligible": "Some words",
+    "words_intelligible": "The words", "instrument_identity_recognizable": "The instruments",
+    "stereo_image_established": "Stereo width", "ambience_reverb_established": "The room (reverb)",
+    "transients_sharp": "Crisp hits", "essentially_final": "Sounds finished",
+}
+
+
+def listening_marks(run: Path) -> dict:
+    """The listening checklist as the page needs it: every answer given so far, per view and step.
+
+    Only a listener fills this in (analysis/annotations.json, by hand or from the page); nothing
+    here is measured. Unanswered questions are left out.
+    """
+    notes = read_json(Path(run) / "analysis/annotations.json") or {}
+    marks = {}
+    for view, key in (("state", "ode"), ("predicted", "ode_predicted")):
+        steps = (notes.get(key) or {}).get("chunk_000") or {}
+        marks[view] = {str(s): {f: v for f, v in (answers or {}).items() if v is not None}
+                       for s, answers in steps.items() if any(v is not None for v in (answers or {}).values())}
+    return {"fields": [[f, LISTENING_LABELS.get(f, f)] for f in scope.LISTENING], **marks}
 
 
 def stack_data(run: Path, out: Path, cache: Path | None = None) -> dict:

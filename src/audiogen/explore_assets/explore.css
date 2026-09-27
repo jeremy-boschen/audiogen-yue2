@@ -116,19 +116,37 @@ kbd { font: 600 10.5px -apple-system, sans-serif; border: 1px solid var(--line);
 
 /* tooltip */
 .helpbtn { margin-left: auto; margin-right: 16px; width: 32px; height: 32px; padding: 0; border-radius: 50%; font-weight: 650; }
-.helpcard { position: fixed; z-index: 30; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(960px, calc(100vw - 32px));
-            max-height: calc(100vh - 96px); overflow: auto; padding: 26px 32px; border-radius: 18px; display: none;
-            background: rgba(14, 21, 38, .97); border: 1px solid rgba(155, 107, 255, .45); box-shadow: 0 30px 90px rgba(0,0,0,.6);
+.helpcard { position: fixed; z-index: 30; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(1000px, calc(100vw - 32px));
+            max-height: calc(100vh - 96px); overflow: auto; display: none; gap: 18px; align-items: start;
             font-size: 14px; line-height: 1.55; color: #d6dcef; }
-.helpcard.on { display: block; }
+.helpcard.on { display: flex; }
+.helppanel { position: relative; flex: 1 1 0; min-width: 0; padding: 24px 26px; border-radius: 18px;
+             background: rgba(14, 21, 38, .97); border: 1px solid rgba(155, 107, 255, .45); box-shadow: 0 30px 90px rgba(0,0,0,.6); }
+@media (max-width: 820px) { .helpcard.on { flex-direction: column; } .helppanel { flex: none; width: 100%; box-sizing: border-box; } }
 .helpcard h2 { font: 600 24px/1.15 var(--serif); margin: 0 0 10px; color: #fff; }
 .helpcard h3 { font-size: 11px; letter-spacing: .2em; text-transform: uppercase; color: #c9b8ff; margin: 16px 0 6px; }
-.helpcard p { margin: 6px 0; max-width: 820px; }
-/* The controls sit in two columns on a wide screen so the whole card fits without scrolling. */
-.helpcard dl { margin: 6px 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); column-gap: 32px; }
-.helpcard dl > div { break-inside: avoid; }
+.helpcard p { margin: 6px 0; }
+.helpcard dl { margin: 6px 0; }
 .helpcard dt { font-weight: 650; color: #fff; margin-top: 10px; }
 .helpcard dd { margin: 2px 0 0; } .helpcard .helpclose { position: absolute; top: 12px; right: 12px; }
+/* Listening marks on the step dial: where a listener first heard something. */
+.heardmark circle { fill: #ffd98f; animation: heardpulse 1.8s ease-in-out infinite; pointer-events: none; }
+.heardmark.reached circle { fill: #fff; animation-duration: 3.2s; }
+@keyframes heardpulse { 0%, 100% { opacity: .35; } 50% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .heardmark circle { animation: none; opacity: .9; } }
+.heard { margin-top: 10px; display: grid; gap: 3px; }
+.heard .dim, .marker .dim { color: var(--muted); font-size: 11.5px; margin: 2px 0 4px; }
+.heardrow { all: unset; cursor: pointer; display: flex; gap: 10px; align-items: baseline; padding: 3px 8px; border-radius: 7px; color: var(--muted); font-size: 12.5px; }
+.heardrow b { min-width: 20px; color: #ffd98f; font-variant-numeric: tabular-nums; }
+.heardrow.reached { color: var(--text); } .heardrow.reached b { color: #fff; }
+.heardrow:hover, .heardrow:focus-visible { background: rgba(22, 33, 58, .8); }
+#markbtn { margin-top: 10px; }
+.marker { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px; }
+.marker .dim { flex-basis: 100%; }
+.markchip { all: unset; cursor: pointer; padding: 5px 10px; border-radius: 999px; font-size: 12px; color: var(--muted);
+            border: 1px solid rgba(58, 78, 120, .7); }
+.markchip:hover { color: var(--text); border-color: rgba(155, 107, 255, .7); }
+.markchip.on { color: #0a0f1c; background: #ffd98f; border-color: #ffd98f; font-weight: 600; }
 .tip { position: fixed; z-index: 20; pointer-events: none; padding: 9px 11px; border-radius: 11px; font-size: 11.5px; line-height: 1.45;
        background: rgba(13, 20, 36, .92); border: 1px solid rgba(155, 107, 255, .5); box-shadow: 0 10px 30px rgba(0,0,0,.5);
        max-width: 300px; display: none; }

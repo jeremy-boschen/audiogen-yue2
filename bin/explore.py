@@ -144,6 +144,7 @@ def cmd_publish(args):
     cache.mkdir(parents=True, exist_ok=True)
     focus, stack = explore.focus_data(run, out, cache), explore.stack_data(run, out, cache)
     label = f"{args.title}, take {args.take}" if args.take else args.title
+    focus["annotate"] = None                          # marks are read-only on the web
     focus["run"] = stack["run"] = label
     done: dict = {}
     focus = _publish_audio(focus, out, args.media_base, done)
@@ -188,13 +189,54 @@ def cmd_publish(args):
           f"{sum((out / 'media' / n).stat().st_size for n in manifest) / 2**20:.0f} MB, media base {args.media_base}")
 
 
+def annotate(out: pathlib.Path, body: dict) -> dict:
+    """Write one listening answer into a run's analysis/annotations.json (the focus page's M)."""
+    import json
+    import os
+    from audiogen import microscope as scope
+    run = (out / str(body.get("run", ""))).resolve()          # the page's own relative path
+    path = run / "analysis" / "annotations.json"
+    if not run.is_relative_to(out.parent.resolve()) or not path.is_file():
+        raise ValueError("no such run")
+    view = {"state": "ode", "predicted": "ode_predicted"}.get(body.get("view"))
+    field, value, step = body.get("field"), body.get("value"), str(body.get("step"))
+    if view is None or field not in scope.LISTENING or value not in (True, False, None):
+        raise ValueError("view must be state or predicted, field a listening question, value true, false or null")
+    notes = json.loads(path.read_text())
+    answers = notes[view]["chunk_000"].get(step)
+    if answers is None:
+        raise ValueError(f"no step {step}")
+    answers[field] = value
+    partial = path.with_suffix(".partial")
+    partial.write_text(json.dumps(notes, indent=2) + "\n")
+    os.replace(partial, path)
+    return explore.listening_marks(run)
+
+
 def cmd_serve(args):
     """Serve the microscope-runs directory on localhost and open the explorer in it."""
     import functools
     import http.server
+    import json
     import webbrowser
     root = args.out.parent          # the pages reach the runs with ../
-    handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=str(root))
+
+    class Handler(http.server.SimpleHTTPRequestHandler):
+        def do_POST(self):
+            if self.path != "/api/annotate":
+                return self.send_error(404)
+            try:
+                body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))) or b"{}")
+                reply, code = json.dumps(annotate(args.out, body)).encode(), 200
+            except (ValueError, KeyError, TypeError) as exc:
+                reply, code = json.dumps({"error": str(exc)}).encode(), 400
+            self.send_response(code)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(reply)))
+            self.end_headers()
+            self.wfile.write(reply)
+
+    handler = functools.partial(Handler, directory=str(root))
     server = http.server.ThreadingHTTPServer(("127.0.0.1", args.port), handler)
     url = f"http://127.0.0.1:{args.port}/{args.out.name}/index.html"
     print("serving", root, "at", url, flush=True)
