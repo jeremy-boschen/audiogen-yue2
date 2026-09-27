@@ -252,6 +252,9 @@
       <section class="helppanel"><button class="btn helpclose" aria-label="Close">✕</button>${controls}
         <div class="row" style="margin-top:16px"><button class="btn primary helpgo">Got it</button></div></section>`;
     document.body.appendChild(card);
+    // The page's key list lives here, not over the landscape.
+    const keys = document.querySelector('.keys');
+    if (keys) card.querySelector('.helpgo').parentNode.before(keys);
     const seen = 'microscope-help-' + key;
     const show = (on) => { card.classList.toggle('on', on); if (!on) { try { localStorage.setItem(seen, '1'); } catch (e) { /* private mode */ } } };
     card.querySelector('.helpclose').onclick = card.querySelector('.helpgo').onclick = () => show(false);

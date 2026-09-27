@@ -6,38 +6,16 @@
   EX.nav('focus');
   EX.help('focus', `
     <h2>Watching a song come into focus</h2>
-    <p>This is an exploration of how YuE2, an open AI music model, generates a song. Everything here was recorded from
-      one real generation, without changing it.</p>
-    <p>YuE2 doesn't record a song from start to finish. It first decides what the song is: the notes,
-      the words, the arrangement. Then it makes the sound for the whole song at once, the way a photo develops: it starts
-      from pure noise and cleans it up in 32 steps. This page lets you stop at any step, look at it, and listen to it.</p>
-    <h3>The landscape</h3>
-    <p>It is the sound, drawn as terrain. <b>Left to right</b> is time through the song. <b>Front to back</b> is pitch: bass at
-      the front, the highest sounds at the back. <b>Height</b> is how loud that pitch is at that moment. At step 0 it is flat
-      static; by step 32 it is the song.</p>
+    <p>YuE2, an open AI music model, makes the sound of a whole song at once, the way a photo develops: it starts from pure
+      noise and cleans it up in 32 steps. This is one real generation, recorded at every step.</p>
+    <p>The landscape is the sound. <b>Left to right</b> is time, <b>front to back</b> is pitch (bass in front), <b>height</b>
+      is loudness. Gray glitter is still forming; color has settled.</p>
     `, `
-    <h3 style="margin-top:0">What to press</h3>
-    <dl>
-      <dt>▶ and the step slider</dt><dd>Press play, then drag the slider (or use ← →) to move between steps while it plays.
-        The sound switches in place.</dd>
-      <dt>Resolve</dt><dd>Plays the whole process for you: step 0 to 32, with the sound following. By default it takes one
-        pass of the song; drag <b>Resolve pace</b> to slow it down or speed it up while it plays.</dd>
-      <dt>I hear…</dt><dd>While it resolves, tap a button over the landscape the moment you hear a voice, the words or the
-        chords. Your marks stay in this browser.</dd>
-      <dt>State · Predicted final · Finished</dt><dd><b>State</b> is the song exactly as it is at this step: still partly
-        noise until the last few steps. <b>Predicted final</b> is where the model thinks it is heading from here, often
-        recognizable surprisingly early. <b>Finished</b> is the end result.</dd>
-      <dt>Ghost overlay</dt><dd>A see-through copy of the other view floating above: in State, where it is heading; in
-        Predicted final, where it actually is. The gap is how far it still has to go.</dd>
-      <dt>Marks on the dial</dt><dd>Where something first became hearable: the beat, a voice, the words. <b>Gold dots</b>
-        are yours: press <kbd>M</kbd> while it plays and tap what you can hear. <b>Blue rings</b> are machines: a speech recognizer, a voice detector and a music
-        transcriber, each comparing a step with its own reading of the finished song. Machines and ears often disagree;
-        both are shown, side by side, in the list below the dial.</dd>
-      <dt>Settling color</dt><dd>Color means that part of the sound already matches the finished song; gray and glittering means it
-        is still forming. The low end and the beat tend to lock in first, fine detail last.</dd>
-    </dl>
-    <p style="color:var(--muted)">Drag to turn the view, scroll to zoom, click the land to jump to that moment. Press
-      <kbd>?</kbd> to bring this back. The numbers in the side panel measure the signal; they are not verdicts on how it sounds.</p>`);
+    <h3 style="margin-top:0">Try it</h3>
+    <p>Press <b>Resolve</b> and listen to the song come out of the noise. Tap <b>I hear…</b> the moment you hear a voice,
+      the words or the chords: a pin marks the spot on the time line. Blue rings on the dial are where machines heard them.</p>
+    <p><b>State</b> is the song at this step, <b>Predicted</b> where it is heading, <b>Finished</b> the end result.</p>
+    `);
   document.getElementById('runlabel').innerHTML = `<b>${D.run}</b> · ${D.seconds.toFixed(0)} s · ${D.steps} steps`;
 
   const C = D.columns, B = D.bands, S = D.steps, NS = S + 1;
@@ -53,7 +31,39 @@
 
   const st = EX.stage(document.getElementById('stage'), { bloom: 0.45, radius: 0.45, threshold: 0.6 });
   const { scene, camera, controls } = st;
-  const home = { pos: new T.Vector3(-96, 72, 128), target: new T.Vector3(6, 2, -4) };
+  const home = { pos: new T.Vector3(-96, 72, 128), target: new T.Vector3(0, 6, 0) };
+  // Frame the land in the open space between the title, the panel and the dock rather than the middle
+  // of the window: step the home view back until the whole scene fits there, then slide the projection
+  // so its center is that space's center. Orbiting keeps the offset; R and resizes re-frame.
+  const HOME_DIR = home.pos.clone().sub(home.target);
+  const BOX = [];
+  for (const x of [-W / 2 - 16, W / 2 + 16]) for (const y of [0, 30]) for (const z of [-DEPTH / 2 - 2, DEPTH / 2 + 10]) BOX.push(new T.Vector3(x, y, z));
+  function frameView() {
+    const w = st.host.clientWidth, h = st.host.clientHeight;
+    const panel = document.getElementById('panel').getBoundingClientRect();
+    const hero = document.querySelector('.hero').getBoundingClientRect();
+    const dock = document.getElementById('dock').getBoundingClientRect();
+    const wide = w > 900;
+    const L0 = 16, R0 = wide ? panel.left - 16 : w - 16, T0 = hero.bottom + 12, B0 = dock.top - 84;
+    const keep = camera.position.clone(), p = new T.Vector3();
+    camera.setViewOffset(w, h, 0, 0, w, h);
+    let fit = 0.8, box;
+    for (; fit < 4; fit += 0.05) {
+      camera.position.copy(HOME_DIR).multiplyScalar(fit).add(home.target); camera.lookAt(home.target); camera.updateMatrixWorld();
+      box = [Infinity, Infinity, -Infinity, -Infinity];
+      for (const c of BOX) {
+        p.copy(c).project(camera);
+        const sx = (p.x + 1) / 2 * w, sy = (1 - p.y) / 2 * h;
+        box = [Math.min(box[0], sx), Math.min(box[1], sy), Math.max(box[2], sx), Math.max(box[3], sy)];
+      }
+      if (box[2] - box[0] <= R0 - L0 && box[3] - box[1] <= B0 - T0) break;
+    }
+    home.pos.copy(camera.position);
+    camera.setViewOffset(w, h, (box[0] + box[2] - L0 - R0) / 2, (box[1] + box[3] - T0 - B0) / 2, w, h);
+    camera.position.copy(keep); camera.lookAt(controls.target); camera.updateMatrixWorld();
+  }
+  new ResizeObserver(frameView).observe(st.host);
+  frameView();
   camera.position.copy(home.pos); controls.target.copy(home.target);
   controls.minDistance = 30; controls.maxDistance = 420; controls.maxPolarAngle = Math.PI * 0.49;
   EX.dust(scene);
@@ -230,11 +240,10 @@
   for (let s = 0; s <= D.seconds + 0.01; s += 20) L.add(`${s}s`, new T.Vector3(xOfSec(s), 0, DEPTH / 2 + 9));
   L.add('time →', new T.Vector3(W / 2 + 10, 0, DEPTH / 2 + 9), 'tick big');
   for (const [f, t] of [[100, '100 Hz'], [300, '300'], [1000, '1 kHz'], [3000, '3 kHz'], [10000, '10 kHz']]) {
-    L.add(t, new T.Vector3(W / 2 + 7, 0, zOfHz(f)));
+    L.add(t, new T.Vector3(W / 2 + 12, 0, zOfHz(f)), 'tick hz');
   }
   L.add('settling wall', new T.Vector3(wallX, 15, DEPTH / 2 + 2), 'tick big');
   (D.sections || []).forEach((s) => { if (s.start < D.seconds) L.add(s.label, new T.Vector3(xOfSec(s.start) + 1, 0, DEPTH / 2 + 5), 'tick'); });
-  const secNote = L.add('sections: score time', new T.Vector3(-W / 2 - 14, 0, DEPTH / 2 + 5), 'tick');
 
   // --- state ------------------------------------------------------------------------
   // Resolve's pace, seconds per step while the song plays. By default the 32 steps take one pass of the song.
@@ -408,7 +417,7 @@
   // --- panel ---------------------------------------------------------------------------
   const $ = (id) => document.getElementById(id);
   const MODES = ['ODE state', 'predicted final', 'finished take'];
-  $('datanote').textContent = `${D.bands_note}. Audio: ${D.audio_note}.`;
+  $('honest').title = `Every number and color here is computed from the decoded audio of this take. ${D.bands_note}. Audio: ${D.audio_note}.`;
 
   // ring
   const ring = $('ring');
@@ -482,20 +491,6 @@
       const [x, y] = pt(ang(+s), R - 22);
       return `<g class="machinemark${reached(s)}"><circle cx="${x}" cy="${y}" r="3"/><title>Step ${s}, a machine: ${fs.map((f) => LABEL[f] || f).join(', ')}</title></g>`;
     }).join('');
-    const mine = {}, theirs = (MACHINE && MACHINE[view]) || {};
-    Object.entries(byStep).forEach(([st, names]) => names.forEach((n) => (mine[n] = +st)));
-    const fields = HEARD.fields.filter(([f, label]) => mine[label] !== undefined || theirs[f] !== undefined);
-    const cell = (who, st, tip) => st === undefined ? `<span class="who ${who} none">${who} –</span>`
-      : `<span class="who ${who}${reached(st)}" title="${tip}">${who} ${st}</span>`;   // a label, not a control: a click used to jump the step
-    const gap = (a, b) => a === undefined || b === undefined ? '' : a < b ? `${b - a} steps sooner` : a > b ? `${a - b} steps later` : 'same step';
-    const empty = canMark ? `<div class="dim">${MACHINE ? 'Blue rings are where machines first picked something out. Can you hear it sooner? ' : ''}Press Resolve and tap the "I hear" buttons over the landscape, or mark more here.</div>` : '';
-    $('heard').innerHTML = fields.length
-      ? `<div class="dim">First heard</div>` + fields.sort(([fa, la], [fb, lb]) =>
-          Math.min(mine[la] ?? 99, theirs[fa] ?? 99) - Math.min(mine[lb] ?? 99, theirs[fb] ?? 99)).map(([f, label]) =>
-          `<div class="heardrow"><span>${label}</span>${cell('you', mine[label], 'Where you first heard it')}${cell('machine', theirs[f],
-            MACHINE && MACHINE.says[f] ? MACHINE.says[f].replace(/"/g, '&quot;') : '')}<small>${gap(mine[label], theirs[f])}</small></div>`).join('')
-        + (Object.keys(mine).length ? '' : empty)
-      : empty;
   }
   const canMark = LOCAL || (() => { try { return !!window.localStorage; } catch (e) { return false; } })();
   let marking = false;
@@ -527,10 +522,20 @@
       .then((j) => { HEARD.state = j.state; HEARD.predicted = j.predicted; drawMarks(); drawMarker(); drawGame(); })
       .catch((e) => $('marker').insertAdjacentHTML('beforeend', `<div class="dim">Not saved: ${e.message}</div>`));
   }
-  // The listening game: big "I hear..." buttons over the landscape for the things the machines mark, so a
-  // visitor races them without finding a key. A tap marks the step on screen as the first time they heard it.
-  const GAME = [['vocal_present', 'a voice'], ['words_partially_intelligible', 'some words'],
-                ['words_intelligible', 'all the words'], ['harmony_recognizable', 'the chords']];
+  // The listening game: small "I hear..." buttons over the landscape for the things the machines mark, so a
+  // visitor races them without finding a key. A tap marks the step as the first time they heard it, and drops
+  // a pin on the time line where the song was when they heard it (kept in this browser, beside the marks).
+  const GAME = [['vocal_present', 'a voice', '#ff8fcf'], ['words_partially_intelligible', 'some words', '#c9a6ff'],
+                ['words_intelligible', 'all the words', '#ffb070'], ['harmony_recognizable', 'the chords', '#7fe0b4']];
+  const AT = `${STORE}-at`;
+  let heardAt = { state: {}, predicted: {} };
+  try { heardAt = { ...heardAt, ...JSON.parse(localStorage.getItem(AT) || '{}') }; } catch (e) { /* private mode */ }
+  const saveAt = () => { try { localStorage.setItem(AT, JSON.stringify(heardAt)); } catch (e) { /* private mode */ } };
+  const pins = Object.fromEntries(GAME.map(([f, , c]) => {
+    const it = L.add('<span class="pinhead"></span>', new T.Vector3(), 'pin');
+    it.el.style.setProperty('--c', c); it.visible = false;
+    return [f, it];
+  }));
   function firstMine(view, field) {
     const steps = Object.keys(HEARD[view] || {}).map(Number).sort((a, b) => a - b);
     return steps.find((st) => HEARD[view][st][field] === true);
@@ -539,29 +544,42 @@
     Object.keys(HEARD[view] || {}).map(Number).forEach((st) => {
       if (st !== step && HEARD[view][st][field] === true) mark(view, st, field, null);
     });
+    heardAt[view][field] = audio.time(); saveAt();
     mark(view, step, field, true);
   }
   function clearMine() {                               // a visitor's own marks only; the machines' stay
     HEARD.state = {}; HEARD.predicted = {}; localStorage.removeItem(STORE);
+    heardAt = { state: {}, predicted: {} }; localStorage.removeItem(AT);
     drawMarks(); drawMarker(); drawGame();
+  }
+  function drawPins(view, theirs) {
+    GAME.forEach(([f, what]) => {
+      const it = pins[f], mine = firstMine(view, f), t = heardAt[view] && heardAt[view][f];
+      it.visible = ui.mode !== 2 && mine !== undefined && t != null;
+      if (!it.visible) return;
+      it.pos.set(xOfSec(t), 0, DEPTH / 2 + 7);
+      it.el.querySelector('.pinhead').textContent = mine;
+      it.el.title = `You heard ${what} at step ${mine}, ${fmt(t)} into the song`
+        + (theirs[f] === undefined ? '' : `; a machine at step ${theirs[f]}`);
+    });
   }
   function drawGame() {
     const box = $('game');
+    const view = viewKey(), s = Math.round(ui.target), theirs = (MACHINE && MACHINE[view]) || {};
+    drawPins(view, theirs);
     box.hidden = !canMark || ui.mode === 2;
     if (box.hidden) return;
-    const view = viewKey(), s = Math.round(ui.target), theirs = (MACHINE && MACHINE[view]) || {};
     const done = GAME.filter(([f]) => firstMine(view, f) !== undefined).length;
-    $('gamecue').innerHTML = done === GAME.length
-      ? 'All four marked. Compare with the machines in the panel, or switch view and try again.'
-      : ui.playing || ui.animating
-        ? 'Tap the moment you hear it'
-        : `Press <b>Resolve</b> to hear the song come out of the noise, and tap the moment you hear each of these.${MACHINE ? ' Can you beat the machines?' : ''}`;
-    $('gamepills').innerHTML = GAME.map(([f, what]) => {
+    $('gamecue').textContent = done === GAME.length ? ''
+      : ui.playing || ui.animating ? 'Tap the moment you hear it'
+      : done ? '' : `Press Resolve, then tap the moment you hear it.${MACHINE ? ' Can you beat the machines?' : ''}`;
+    $('gamepills').innerHTML = GAME.map(([f, what, c]) => {
       const mine = firstMine(view, f), them = theirs[f];
-      if (mine === undefined) return `<button class="gamepill" data-f="${f}">I hear ${what}</button>`;
-      const vs = them === undefined ? '' : mine < them ? ` · ${them - mine} before the machine` : mine > them ? ` · ${mine - them} after the machine` : ' · same as the machine';
-      return `<button class="gamepill got" data-f="${f}" title="Tap to move it to step ${s}">${what} <b>step ${mine}</b>${vs}</button>`;
-    }).join('') + (!LOCAL && done ? '<button class="gamepill again" id="gameagain" title="Clear your marks and start from step 0">↺ Try again</button>' : '');
+      if (mine === undefined) return `<button class="gamepill" style="--c:${c}" data-f="${f}">I hear ${what}</button>`;
+      const vs = them === undefined ? '' : mine < them ? `${them - mine} ahead` : mine > them ? `${mine - them} behind` : 'tied';
+      return `<button class="gamepill got" style="--c:${c}" data-f="${f}" title="Tap to move it to step ${s}. Against the machine: steps ahead or behind.">`
+        + `<i></i>${what} <b>${mine}</b>${vs ? `<small>${vs}</small>` : ''}</button>`;
+    }).join('') + (!LOCAL && done ? '<button class="gamepill again" id="gameagain" title="Clear your marks and start from step 0" aria-label="Try again">↺</button>' : '');
     const again = $('gamepills').querySelector('#gameagain');
     if (again) again.onclick = () => { clearMine(); if (ui.animating) $('resolve').click(); setStep(0); };
     $('gamepills').querySelectorAll('.gamepill:not(.again)').forEach((b) => (b.onclick = () => {
@@ -569,21 +587,21 @@
       b.classList.add('pop');
     }));
   }
-  $('markbtn').hidden = !canMark;
+  $('markbtn').hidden = !LOCAL;
   $('markbtn').onclick = () => { marking = !marking; $('markbtn').classList.toggle('on', marking); drawMarker(); };
 
   // metrics
   const series = (set, fn) => D.metrics.map((m) => fn(m[set] || {}));
   const meanSettle = (arr, s) => { let t = 0; for (let b = 0; b < B; b++) t += arr[s * B + b]; return t / B / 255; };
   const METRICS = [
-    ['Waveform correlation with the take', 'sample by sample', (m) => m.correlation_final, (v) => v],
-    ['Latent cosine with the final latent', '', (m) => m.cosine_final, (v) => v],
-    ['Band envelope agreement', 'mean over bands (map below)', null, (v) => v],
-    ['Spectral centroid', 'Hz', (m) => m.spectral_centroid_hz, (v) => v / 5000],
+    ['Waveform match', 'Waveform correlation with the finished take, sample by sample', (m) => m.correlation_final, (v) => v],
+    ['Latent match', 'Cosine similarity with the final latent', (m) => m.cosine_final, (v) => v],
+    ['Band agreement', 'Band envelope agreement, mean over pitch ranges (map below)', null, (v) => v],
+    ['Brightness Hz', 'Spectral centroid in Hz', (m) => m.spectral_centroid_hz, (v) => v / 5000],
   ];
   const metricEls = METRICS.map(([name, sub]) => {
     const d = document.createElement('div'); d.className = 'metric';
-    d.innerHTML = `<div class="name">${name} <small>${sub}</small></div><div class="val">–</div><canvas></canvas>`;
+    d.title = sub; d.innerHTML = `<div class="name">${name}</div><div class="val">–</div><canvas></canvas>`;
     $('metrics').appendChild(d);
     return { val: d.querySelector('.val'), cv: d.querySelector('canvas') };
   });
@@ -603,9 +621,8 @@
     const other = setName === 'state' ? 'predicted' : 'state';
     $('stepbig').innerHTML = `step ${s}`;
     $('ringnum').textContent = s;
-    $('tlabel').textContent = m.t != null ? `t = ${m.t.toFixed(3)}` : '';
     const blurb = s === 0 ? 'the start: pure noise in the latent' : s === S ? 'the end: this state is the take' : `${Math.round(s / S * 100)}% of the way through the solve`;
-    $('stepsub').innerHTML = `${blurb}<br>showing <b style="color:#ffc2e3">${MODES[ui.mode]}</b>`;
+    $('stepsub').innerHTML = `${blurb}<br>showing <b style="color:#ffc2e3">${MODES[ui.mode]}</b>${m.t != null ? ` · t ${m.t.toFixed(2)}` : ''}`;
     $('arc').setAttribute('d', s ? arcPath(s) : '');
     const [kx, ky] = pt(ang(s), R); $('knob').setAttribute('cx', kx); $('knob').setAttribute('cy', ky);
     ringTicks.forEach((t, i) => t.setAttribute('stroke', i <= s ? rgbCss(i / S) : '#3a4a70'));
@@ -613,14 +630,10 @@
     document.querySelectorAll('#modes button').forEach((b) => b.classList.toggle('on', +b.dataset.mode === ui.mode));
     $('ghost').classList.toggle('on', ui.ghost);
     $('settlebtn').classList.toggle('on', ui.settle);
-    $('modenote').innerHTML = ui.mode === 0
-      ? 'The solver\'s own state after this step, decoded. Early states are mostly noise with the take fading in.' + (ui.ghost ? ' Lines above: the predicted final.' : '')
-      : ui.mode === 1 ? 'What the solver would finish at if it jumped straight to the end from here (x − t·v), decoded. This answers “what had it already decided?”' + (ui.ghost ? ' Lines above: the ODE state.' : '')
-      : 'The finished take (step 32). The terrain ignores the step; the ghost still shows the predicted final at the step.';
     const sel = setName === 'predicted' ? 1 : 0;
     METRICS.forEach((row, k) => {
       const raw = row[2] ? row[2](m[setName] || {}) : meanSettle(sel ? settleP : settleS, s);
-      metricEls[k].val.textContent = row[0].startsWith('Spectral') ? (raw == null ? '–' : Math.round(raw)) : num(raw);
+      metricEls[k].val.textContent = row[0].startsWith('Brightness') ? (raw == null ? '–' : Math.round(raw)) : num(raw);
       const [a, b] = metricSeries[k];
       EX.spark(metricEls[k].cv, sel ? [a, b] : [b, a], s, ['rgba(141,154,179,.45)', sel ? '#ff5fb4' : '#9b6bff']);
     });
@@ -717,7 +730,7 @@
     else if (k === 'arrowleft') { e.preventDefault(); setStep(ui.target - 1); }
     else if (k === '1' || k === '2' || k === '3') setMode(+k - 1);
     else if (k === 'g') $('ghost').click();
-    else if (k === 'm' && canMark) $('markbtn').click();
+    else if (k === 'm' && LOCAL) $('markbtn').click();
     else if (k === 'c') $('settlebtn').click();
     else if (k === 'a') $('resolve').click();
     else if (k === '[' || k === ']') setPace(ui.pace + (k === '[' ? 0.5 : -0.5));
