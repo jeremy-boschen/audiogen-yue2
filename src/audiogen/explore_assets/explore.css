@@ -290,8 +290,10 @@ input[type=range] { width: 100%; accent-color: var(--pink); }
 .pinanchor { position: absolute; left: -5px; top: -5px; width: 10px; height: 10px; border-radius: 50%; background: var(--c);
              box-shadow: 0 0 10px var(--c), 0 0 0 2.5px rgba(10, 15, 28, .65); }
 .pinanchor[hidden], .pintags[hidden] { display: none; }
-.pinanchor.landing { animation: pinland .6s ease-out; }
-@keyframes pinland { 0% { scale: 1; } 40% { scale: 1.7; } 100% { scale: 1; } }
+/* a landing ripples out as a ring; the dot itself never scales, since scale would also scale its translate */
+.pinanchor::after { content: ""; position: absolute; inset: 0; border-radius: 50%; border: 2px solid var(--c); opacity: 0; }
+.pinanchor.landing::after { animation: pinland .6s ease-out; }
+@keyframes pinland { 0% { inset: 0; opacity: .9; } 100% { inset: -12px; opacity: 0; } }
 .pintags { position: absolute; left: 0; top: 0; padding: 4px 8px; border-radius: 8px; white-space: nowrap;
            background: rgba(10, 15, 28, .55); border: 1px solid rgba(255, 255, 255, .08); backdrop-filter: blur(6px);
            font-size: 11px; line-height: 17px; color: var(--muted); }
@@ -304,7 +306,7 @@ input[type=range] { width: 100%; accent-color: var(--pink); }
 @keyframes gamein { 0% { opacity: 0; transform: translateY(10px) scale(.9); } 100% { opacity: 1; transform: none; } }
 .cuemark circle { fill: var(--c); opacity: .45; pointer-events: none; }
 .cuemark.reached circle { opacity: 1; filter: drop-shadow(0 0 3px var(--c)); }
-@media (prefers-reduced-motion: reduce) { .fly { transition: none; } .gamepill.enter, .pinanchor.landing { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .fly { transition: none; } .gamepill.enter, .pinanchor.landing::after { animation: none; } }
 
 /* glossary: a dotted term with a small card on hover, plain first, the technical line under it */
 dfn[data-g] { font-style: inherit; text-decoration: underline dotted rgba(201, 184, 255, .7); text-underline-offset: 3px; cursor: help; }

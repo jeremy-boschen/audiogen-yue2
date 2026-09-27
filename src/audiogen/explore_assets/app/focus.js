@@ -675,7 +675,7 @@
       fly.animate([{ transform: `translate(${fx}px, ${fy}px) scale(1.4)` }, { transform: `translate(${tx}px, ${ty}px) scale(1)` }],
         { duration: 550, easing: 'cubic-bezier(.35, 0, .25, 1)', fill: 'forwards' }).onfinish = () => {
         fly.remove(); pin.style.visibility = ''; pin.classList.add('landing');
-        setTimeout(() => pin.classList.remove('landing'), 450);
+        setTimeout(() => pin.classList.remove('landing'), 650);
       };
     }
     drawGame();
