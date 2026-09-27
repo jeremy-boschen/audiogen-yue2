@@ -89,6 +89,7 @@ kbd { font: 600 10.5px -apple-system, sans-serif; border: 1px solid var(--line);
 .seg button kbd { font-size: 9px; padding: 0 4px; }
 .seg button.on kbd { background: rgba(255,255,255,.5); border-color: rgba(10,15,28,.2); color: #0a0f1c; }
 .row { display: flex; gap: 8px; align-items: center; }
+[hidden] { display: none !important; }      /* .btn and friends set display, which would override the attribute */
 .btn { border: 1px solid var(--line); background: var(--raised); border-radius: 10px; padding: 7px 12px; color: var(--text);
        font-size: 12px; font-weight: 550; display: inline-flex; align-items: center; gap: 7px; }
 .btn:hover { border-color: var(--violet); }
