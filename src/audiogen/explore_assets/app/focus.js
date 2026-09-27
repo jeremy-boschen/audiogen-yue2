@@ -22,7 +22,7 @@
   document.getElementById('runlabel').innerHTML = `<b>${D.run}</b> · ${D.seconds.toFixed(0)} s · ${D.steps} steps`;
 
   const C = D.columns, B = D.bands, S = D.steps, NS = S + 1;
-  const W = 150, DEPTH = 52, H = 17;
+  const W = 150, DEPTH = 78, H = 17;      // deep enough that the Hz bands spread out
   const state = decode(D.state, Uint8Array), pred = decode(D.predicted, Uint8Array);
   const settleS = decode(D.settle_state, Uint8Array), settleP = decode(D.settle_predicted, Uint8Array);
 
@@ -33,11 +33,11 @@
   const xOfSec = (s) => (s / D.seconds - 0.5) * W;
   // Five plain-named pitch bands: a ruler at the end of the land, and an optional tint across it.
   const PITCH = [
-    ['bass', 40, 250, '#ff7a59', 'Kick drum, bass guitar and the bottom of the piano: what you feel as much as hear.', 'Fundamentals of the low instruments; most of the energy in a mix.'],
-    ['body', 250, 1000, '#ffc15e', 'The warmth and weight of voices, guitars and keys. Too much of it sounds muddy.', 'Low-mid fundamentals and their first harmonics.'],
-    ['voice & lead', 1000, 4000, '#7fe0b4', 'Where the ear is most sensitive: the heart of the singing, the melody, and what makes words understandable.', 'Vowel formants; the ear\'s most sensitive range.'],
-    ['bite', 4000, 10000, '#5cb8ff', 'Consonants like s and t, the snap of a snare, the attack of cymbals.', 'Sibilance and transients.'],
-    ['air', 10000, 16000, '#c49bff', 'Breath, shimmer and sparkle. Static hisses loudest up here, so it is the last to clear.', 'The top octave; noise dominates it early in the solve.'],
+    ['bass', 40, 250, '#ff3d6e', 'Kick drum, bass guitar and the bottom of the piano: what you feel as much as hear.', 'Fundamentals of the low instruments; most of the energy in a mix.'],
+    ['body', 250, 1000, '#ff9a1f', 'The warmth and weight of voices, guitars and keys. Too much of it sounds muddy.', 'Low-mid fundamentals and their first harmonics.'],
+    ['voice & lead', 1000, 4000, '#22e6a0', 'Where the ear is most sensitive: the heart of the singing, the melody, and what makes words understandable.', 'Vowel formants; the ear\'s most sensitive range.'],
+    ['bite', 4000, 10000, '#2fa8ff', 'Consonants like s and t, the snap of a snare, the attack of cymbals.', 'Sibilance and transients.'],
+    ['air', 10000, 16000, '#b45cff', 'Breath, shimmer and sparkle. Static hisses loudest up here, so it is the last to clear.', 'The top octave; noise dominates it early in the solve.'],
   ];
   const hzText = (f) => (f >= 1000 ? `${f / 1000}k` : `${f}`);
   PITCH.forEach(([name, lo, hi, , plain, tech], i) => { EX.GLOSSARY[`hz${i}`] = [`${hzText(lo)}–${hzText(hi)} Hz · ${name}`, plain, tech]; });
@@ -242,26 +242,26 @@
   // Two bars in front of the land: the arrangement (verse, chorus: from the score, so in score time), and in
   // front of it the time line, where the pins go.
   const ARR_Z = DEPTH / 2 + 4.5, TIME_Z = DEPTH / 2 + 8;
-  const SEC_COLOR = { verse: '#6f86e8', chorus: '#e46fb4', bridge: '#f0a35e', intro: '#7fcfb0', outro: '#7fcfb0' };
+  const SEC_COLOR = { verse: '#3d7bff', chorus: '#ff3da8', bridge: '#ff8a1f', intro: '#1fd6a0', outro: '#1fd6a0' };
   const secGroup = new T.Group(); scene.add(secGroup);
   (D.sections || []).forEach((s) => {
     if (s.start >= D.seconds) return;
     const x0 = xOfSec(s.start), x1 = xOfSec(Math.min(s.end, D.seconds));
-    const m = new T.Mesh(new T.PlaneGeometry(Math.max(0.1, x1 - x0 - 0.5), 2.4),
-      new T.MeshBasicMaterial({ color: SEC_COLOR[s.label] || '#9aa6c4', transparent: true, opacity: 0.6, toneMapped: false }));
+    const m = new T.Mesh(new T.PlaneGeometry(Math.max(0.1, x1 - x0 - 0.5), 1.5),
+      new T.MeshBasicMaterial({ color: SEC_COLOR[s.label] || '#9aa6c4', transparent: true, opacity: 0.5, toneMapped: false }));
     m.rotation.x = -Math.PI / 2; m.position.set((x0 + x1) / 2, 0.02, ARR_Z);
     secGroup.add(m);
   });
-  const timeBar = new T.Mesh(new T.PlaneGeometry(W, 1.1), new T.MeshBasicMaterial({ color: '#3a4d7a', toneMapped: false }));
+  const timeBar = new T.Mesh(new T.PlaneGeometry(W, 1.6), new T.MeshBasicMaterial({ color: new T.Color('#9fe6ff').multiplyScalar(1.6), toneMapped: false }));
   timeBar.rotation.x = -Math.PI / 2; timeBar.position.set(0, 0.02, TIME_Z); scene.add(timeBar);
   for (let t = 0; t <= D.seconds + 0.01; t += 10) {
-    const tick = new T.Mesh(new T.PlaneGeometry(0.35, t % 20 ? 1.6 : 2.4), new T.MeshBasicMaterial({ color: '#9fb2dc', toneMapped: false }));
-    tick.rotation.x = -Math.PI / 2; tick.position.set(xOfSec(t), 0.03, TIME_Z + 0.4); scene.add(tick);
+    const tick = new T.Mesh(new T.PlaneGeometry(0.45, t % 20 ? 2.2 : 3.4), new T.MeshBasicMaterial({ color: new T.Color('#ffffff').multiplyScalar(1.5), toneMapped: false }));
+    tick.rotation.x = -Math.PI / 2; tick.position.set(xOfSec(t), 0.03, TIME_Z + 0.9); scene.add(tick);
   }
 
   // --- labels ---------------------------------------------------------------------
   const L = EX.labels(st.host, camera);
-  for (let s = 0; s <= D.seconds + 0.01; s += 20) L.add(`${s}s`, new T.Vector3(xOfSec(s), 0, TIME_Z + 3));
+  for (let s = 0; s <= D.seconds + 0.01; s += 20) L.add(`${s}s`, new T.Vector3(xOfSec(s), 0, TIME_Z + 4), 'tick tsec');
   L.add('time →', new T.Vector3(W / 2 + 10, 0, TIME_Z), 'tick big');
   // Hz bands: a see-through colored layer floating just above the noise, one strip per band across the whole land,
   // like the ghost. Their labels stand by the settling wall, whose bars take the band colors while it is on.
@@ -273,6 +273,17 @@
     m.rotation.x = -Math.PI / 2; m.position.set(0, ROOF_Y, (z0 + z1) / 2); m.visible = false; scene.add(m);
     return m;
   });
+  const blockMat = new T.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false, blending: T.AdditiveBlending, side: T.DoubleSide, toneMapped: false });
+  const block = new T.Mesh(new T.BoxGeometry(1, 1, 1), blockMat); block.visible = false; scene.add(block);
+  const blockEdges = new T.LineSegments(new T.EdgesGeometry(new T.BoxGeometry(1, 1, 1)),
+    new T.LineBasicMaterial({ transparent: true, opacity: 0, blending: T.AdditiveBlending, toneMapped: false }));
+  block.add(blockEdges);
+  let blockBand = -1;
+  function placeBlock(i) {                    // the band's frequency range, across the whole song and the full height
+    const [, lo, hi, color] = PITCH[i], z0 = zOfHz(lo), z1 = zOfHz(hi), top = H * 1.5;
+    block.scale.set(W, top, Math.abs(z0 - z1)); block.position.set(0, top / 2, (z0 + z1) / 2);
+    blockMat.color.set(color); blockEdges.material.color.set(color).multiplyScalar(1.4); blockBand = i;
+  }
   const bandLabels = PITCH.map(([name, lo, hi, color], i) => {
     const el = L.add(`<dfn data-g="hz${i}">${hzText(lo)}–${hzText(hi)} Hz</dfn> <span>${name}</span>`,
       new T.Vector3(wallX - 3, 0, (zOfHz(lo) + zOfHz(hi)) / 2), 'tick hzband').el;
@@ -619,7 +630,7 @@
       const html = cl.map((p) => `<div style="--c:${p.c.color}"><i></i>${p.c.label.replace(/^(the|a) /, '')} <b>${mine[p.c.id].step}</b></div>`).join('');
       if (el.dataset.html !== html) { el.innerHTML = html; el.dataset.html = html; }
       el.hidden = false;
-      const jx = cl.reduce((t, p) => t + p.x, 0) / cl.length, jy = Math.max(...cl.map((p) => p.y)) + (cl.length > 1 ? 16 : 0);
+      const jx = cl.reduce((t, p) => t + p.x, 0) / cl.length, jy = Math.max(...cl.map((p) => p.y));
       return { cl, el, jx, jy, gw: el.offsetWidth, gh: el.offsetHeight };
     });
     groups.forEach((el, key) => { if (!seen.has(key)) el.hidden = true; });
@@ -632,14 +643,11 @@
     laid.forEach((g) => {
       const top = Math.max(floor - g.gh, g.jy + 22);
       g.el.style.transform = `translate(${g.x.toFixed(1)}px, ${top.toFixed(1)}px)`;
-      const ax = Math.min(g.x + g.gw - 10, Math.max(g.x + 10, g.jx));   // where the leader meets the tag
-      if (g.cl.length > 1) {
-        g.cl.forEach((p) => { svg += `<line x1="${p.x}" y1="${p.y}" x2="${g.jx}" y2="${g.jy}" stroke="${p.c.color}" stroke-opacity=".7"/>`; });
-        svg += `<circle cx="${g.jx}" cy="${g.jy}" r="2" fill="#c9d2e3"/><line x1="${g.jx}" y1="${g.jy}" x2="${ax}" y2="${top - 3}" stroke="#c9d2e3" stroke-opacity=".45"/>`;
-      } else {
-        const p = g.cl[0];
-        svg += `<line x1="${p.x}" y1="${p.y}" x2="${ax}" y2="${top - 3}" stroke="${p.c.color}" stroke-opacity=".7"/>`;
-      }
+      const rows = [...g.el.children];
+      g.cl.forEach((p, r) => {                      // each part's own line, ending at its own row's dot
+        const row = rows[r], dot = row ? row.offsetTop + row.offsetHeight / 2 : 10;
+        svg += `<line x1="${p.x}" y1="${p.y + 6}" x2="${g.x + 7}" y2="${top + dot}" stroke="${p.c.color}" stroke-opacity=".75"/>`;
+      });
     });
     pinLines.innerHTML = svg;
   }
@@ -648,16 +656,20 @@
     heard[view] = { ...(heard[view] || {}), [c.id]: { step, at } }; saveHeard();
     if (LOCAL) mark(view, step, PARTS[c.id][2], true);
     placePins(); drawMarks();
-    const from = chip.getBoundingClientRect(), anchor = anchorFor(c).getBoundingClientRect();
-    const fly = document.createElement('div'); fly.className = 'fly'; fly.style.setProperty('--c', c.color);
-    fly.style.left = `${from.left + from.width / 2}px`; fly.style.top = `${from.top + from.height / 2}px`;
-    document.body.appendChild(fly);
-    const pin = anchorFor(c); pin.classList.add('landing');
-    requestAnimationFrame(() => {
-      fly.style.transform = `translate(${anchor.left + anchor.width / 2 - from.left - from.width / 2}px, ${anchor.top + anchor.height / 2 - from.top - from.height / 2}px) scale(.5)`;
-      fly.style.opacity = '0.2';
-    });
-    setTimeout(() => { fly.remove(); pin.classList.remove('landing'); }, reduced ? 0 : 650);
+    const from = chip.getBoundingClientRect(), pin = anchorFor(c);
+    pv.set(xOfSec(at), 0, TIME_Z).project(camera);
+    const tx = (pv.x + 1) / 2 * st.host.clientWidth, ty = (1 - pv.y) / 2 * st.host.clientHeight;
+    const fx = from.left + from.width / 2, fy = from.top + from.height / 2;
+    if (!reduced) {
+      const fly = document.createElement('div'); fly.className = 'fly'; fly.style.setProperty('--c', c.color);
+      document.body.appendChild(fly);
+      pin.style.visibility = 'hidden';                 // the dot arrives, then the pin is there
+      fly.animate([{ transform: `translate(${fx}px, ${fy}px) scale(1.4)` }, { transform: `translate(${tx}px, ${ty}px) scale(1)` }],
+        { duration: 550, easing: 'cubic-bezier(.35, 0, .25, 1)', fill: 'forwards' }).onfinish = () => {
+        fly.remove(); pin.style.visibility = ''; pin.classList.add('landing');
+        setTimeout(() => pin.classList.remove('landing'), 450);
+      };
+    }
     drawGame();
   }
   function clearMine() {                               // a visitor's own marks only
@@ -865,7 +877,7 @@
     const s = Math.round(ui.target), at = (arr, k) => arr[k * B * C + p.b * C + p.c] / 255;
     const [lo, hi] = D.range_log10, db = (v) => ((lo + v * (hi - lo)) * 10 - hi * 10).toFixed(0);
     uniforms.uHoverZ.value = bandZ[p.b];
-    const band = PITCH[bandOf(D.band_lo_hz[p.b])]; hoverBand = ui.bands ? bandOf(D.band_lo_hz[p.b]) : -1;
+    const band = PITCH[bandOf(D.band_lo_hz[p.b])]; hoverBand = bandOf(D.band_lo_hz[p.b]);
     tip.show(`<b>${fmt(p.sec)}</b> into the song · <b>${band[0]}</b> <span class="m">(${Math.round(D.band_lo_hz[p.b])}–${Math.round(D.band_hi_hz[p.b])} Hz)</span><br>
       <span class="m">loudness here at step ${s}, in dB below the loudest point:</span><br>
       now ${db(at(state, s))} · predicted ${db(at(pred, s))} · finished ${db(at(state, S))}<br>
@@ -899,6 +911,9 @@
       m.material.opacity += (want - m.material.opacity) * k; m.visible = m.material.opacity > 0.004;
     });
     bandLabels.forEach((el, i) => el.classList.toggle('hot', hoverBand === i));
+    if (hoverBand >= 0 && hoverBand !== blockBand) placeBlock(hoverBand);
+    blockMat.opacity += ((hoverBand >= 0 ? 0.16 : 0) - blockMat.opacity) * k;
+    blockEdges.material.opacity = blockMat.opacity * 4; block.visible = blockMat.opacity > 0.004;
     uniforms.uTime.value = reduced ? 0 : now;
     ghostUniforms.uGhostMix.value = ui.mode === 1 ? 0 : 1;
     ghostUniforms.uAlpha.value += ((ui.ghost ? 0.3 : 0) - ghostUniforms.uAlpha.value) * k;
