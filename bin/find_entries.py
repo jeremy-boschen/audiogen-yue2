@@ -81,6 +81,8 @@ def main() -> None:
     ap.add_argument("run", type=pathlib.Path)
     ap.add_argument("--demucs-python", default=os.path.expanduser("~/dev/ai/demucs/.venv/bin/python"))
     ap.add_argument("--device", default="cpu")
+    ap.add_argument("--by-ear", action="append", default=[], metavar="ID=SECONDS",
+                    help="a listener's correction, kept beside the machine's reading (e.g. drums=21.9)")
     a = ap.parse_args()
     run = a.run.expanduser().resolve()
     audio, an = run / "final" / "audio.wav", run / "analysis"
@@ -112,6 +114,11 @@ def main() -> None:
                             "by": f"SheetSage chord.lab on the finished state: first chord ({chord})"})
             break
 
+    for fix in a.by_ear:                   # the ear wins; the machine's reading stays in "by"
+        sid, at = fix.split("=")
+        e = next(e for e in entries if e["id"] == sid)
+        e["by"] = f"set by ear; the machine read {e['at']:g} s ({e['by']})"
+        e["at"] = float(at)
     entries.sort(key=lambda e: e["at"])
     (an / "entries.json").write_text(json.dumps({
         "by": f"{MODEL} stems of the finished take for instruments and voice (onset rule: "
