@@ -10,7 +10,7 @@
 <div class="stage" id="stage"><div class="vignette"></div></div>
 
 <div class="hero">
-  <div class="kicker">Generation microscope · acoustic ODE</div>
+  <div class="kicker">Generation microscope · from noise to song</div>
   <h1>Coming into focus</h1>
   <p>The whole song as a spectrogram landscape (time → right, pitch region → back, energy ↑), re-drawn at every step of the
      32-step solve. Drag the ring or press <kbd>←</kbd><kbd>→</kbd> and watch <em>noise become the take</em>.
@@ -18,52 +18,52 @@
 </div>
 
 <aside class="panel right" id="panel">
-  <h3>ODE step <small id="tlabel"></small></h3>
+  <h3>Step <small id="tlabel"></small></h3>
   <div class="ringwrap">
     <svg class="ring" id="ring" viewBox="0 0 150 150"></svg>
     <div class="stepinfo">
       <div class="big" id="stepbig">0</div>
       <div class="sub" id="stepsub"></div>
       <div class="row" style="margin-top:10px">
-        <button class="btn round primary" id="play" title="Play / pause (space)">▶</button>
-        <button class="btn" id="resolve" title="Animate the solve (A)">Resolve <kbd>A</kbd></button>
+        <button class="btn round primary" id="play" title="Play or pause the song at this step (space)">▶</button>
+        <button class="btn" id="resolve" title="Play the whole process: step 0 to 32 on its own, sound following (A)">Resolve <kbd>A</kbd></button>
       </div>
       <div class="sub" id="audiostatus" aria-live="polite"></div>
     </div>
   </div>
   <input type="range" id="slider" min="0" max="32" step="1" value="0" style="margin-top:8px">
 
-  <h3>View &amp; listen <small>switches without restarting</small></h3>
+  <h3>What to show and hear <small>switches without restarting</small></h3>
   <div class="seg" id="modes">
-    <button data-mode="0">State <kbd>1</kbd></button>
-    <button data-mode="1">Predicted final <kbd>2</kbd></button>
-    <button data-mode="2">Finished <kbd>3</kbd></button>
+    <button data-mode="0" title="The song as it is at this step, still part noise">State <kbd>1</kbd></button>
+    <button data-mode="1" title="Where the model thinks the song is heading from this step">Predicted final <kbd>2</kbd></button>
+    <button data-mode="2" title="The finished song (step 32)">Finished <kbd>3</kbd></button>
   </div>
   <div class="row" style="margin-top:8px">
-    <button class="btn" id="ghost">Ghost overlay <kbd>G</kbd></button>
-    <button class="btn" id="settlebtn">Settling colour <kbd>C</kbd></button>
+    <button class="btn" id="ghost" title="A see-through copy of the other view floating above: where it is heading, or where it is now (G)">Ghost overlay <kbd>G</kbd></button>
+    <button class="btn" id="settlebtn" title="Colour marks what is already decided; cold blue is still forming (C)">Settling colour <kbd>C</kbd></button>
   </div>
   <div class="note" id="modenote" style="margin-top:8px"></div>
 
-  <h3>This step, as signal <small>not listening results</small></h3>
+  <h3>This step in numbers <small>for the curious</small></h3>
   <div id="metrics"></div>
 
-  <h3>Waveform correlation by band <small>bands.json</small></h3>
+  <h3>How close each pitch range is <small>waveform correlation by band</small></h3>
   <div class="bars" id="bands"></div>
 
-  <h3>Band settling map <small>click to jump</small></h3>
+  <h3>When each pitch range locks in <small>click to jump</small></h3>
   <canvas id="settlemap" style="width:100%;height:150px;display:block;cursor:pointer;border-radius:8px"></canvas>
   <div class="note" style="margin-top:6px">Rows are frequency bands (low at bottom), columns are ODE steps. Brightness is the
     correlation over time of that band's energy envelope with the finished take's. Ticks mark the first step from which it stays ≥ 0.9.</div>
 
   <div class="honest"><b>Signal statistics, not listening results.</b> Every number and colour here is computed from the decoded
-    audio of one take (seed 777): correlations with the finished take, envelope energy. They locate where the signal changes;
+    audio of this take: correlations with the finished take, envelope energy. They locate where the signal changes;
     whether you can hear a vocal, a beat or words at a step is a listening question this page does not answer.</div>
   <div class="note" id="datanote" style="margin-top:8px"></div>
 </aside>
 
 <div class="panel dock" id="dock">
-  <div class="time" id="time">0:00.0 / 3:20</div>
+  <div class="time" id="time">0:00.0</div>
   <div class="scrub" id="scrub"><canvas id="scrubcanvas"></canvas></div>
 </div>
 

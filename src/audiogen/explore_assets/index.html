@@ -6,7 +6,7 @@
 <title>Microscope · explore</title>
 <link rel="stylesheet" href="explore.css">
 <style>
-  html, body { overflow: auto; }
+  html, body { overflow: visible; height: auto; min-height: 100%; }   /* the document scrolls, not a box inside it */
   body { background: radial-gradient(90% 70% at 70% 0%, #1c1740 0%, #0a0f1c 60%) fixed, #0a0f1c; min-height: 100%; }
   .wrap { max-width: 1320px; margin: 0 auto; padding: 96px 32px 60px; }
   .intro h1 { font: 600 64px/1 var(--serif); margin: 10px 0 14px; letter-spacing: -.02em;
@@ -39,21 +39,19 @@
   </div>
   <div class="grid">
     <a class="card" href="focus.html"><canvas data-art="focus"></canvas><div class="body"><div class="num">01 · the headline</div>
-      <h2>Coming into focus</h2><p>The song as a spectrogram landscape at every one of the 32 ODE steps. Morph from noise to the
-      take, overlay the solver's predicted final, and hear either one from the same moment.</p><div class="facts" id="f-focus"></div></div></a>
+      <h2>Coming into focus</h2><p>The song drawn as a landscape of sound at each of the 32 steps the model takes from pure noise
+      to the finished take. Move through the steps while it plays, and hear where the model thinks it is heading.</p><div class="facts" id="f-focus"></div></div></a>
     <a class="card" href="stack.html"><canvas data-art="stack"></canvas><div class="body"><div class="num">02 · the hierarchy</div>
-      <h2>The stack</h2><p>Score, semantic tokens, acoustic latent and audio as floors of one building. Light a moment through all of
-      them, hear the phrase, read its lyric, and replay the plan being written left to right.</p><div class="facts" id="f-stack"></div></div></a>
+      <h2>The stack</h2><p>The four layers the model writes, as floors of one building: the score it plans, a sketch of the sound,
+      the detailed sound, and the audio. Light one moment through all of them, hear the phrase, read its lyric, and replay the
+      writing as it happened.</p><div class="facts" id="f-stack"></div></div></a>
     <a class="card" href="map.html"><canvas data-art="map"></canvas><div class="body"><div class="num">03 · all the takes</div>
       <h2>Take map</h2><p>Every finished render as a glowing point, placed by envelope similarity: seed studies, fixed-ABC takes,
       noise seeds and N-step solves. Click to listen; switch takes at the same moment.</p><div class="facts" id="f-map"></div></div></a>
   </div>
   <div class="foot">
     <div class="panel"><h3>What the numbers are</h3>
-      <div class="honest" style="margin-top:0">Every value in these views is a <b>signal statistic</b> of decoded audio or of the
-        model's tokens and latents: correlations with the finished take, spectrogram-envelope similarity, counts from the score.
-        They locate where things change and which takes resemble each other as signals. They are not listening results; what
-        you hear is the verdict.</div></div>
+      <div class="honest" style="margin-top:0">The numbers on these pages measure the sound as a <b>signal</b>: how closely each step matches the finished song, and where it changes. They show <i>what</i> changes and when; they do not say whether it sounds good. Your ears decide that.</div></div>
     <div class="panel"><h3>Build</h3><ul id="build"></ul></div>
   </div>
 </div>

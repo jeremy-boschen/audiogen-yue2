@@ -4,6 +4,24 @@
   const { T, reduced, decode, fmt, num, rampJS, css } = EX;
   const D = window.STACK;
   EX.nav('stack');
+  EX.help('stack', `
+    <h2>Four layers of one song</h2>
+    <p>This is an exploration of how YuE2, an open AI music model, generates a song. Everything here was recorded from
+      one real generation, without changing it.</p>
+    <p>Before any sound exists, the model writes the song down in layers, each made from the one above it. This page stacks
+      them like the floors of a building, all on one timeline: <b>left to right is time</b>.</p>
+    <dl>
+      <div><dt>Score</dt><dd>The plan: melody, chords and lyrics, written as sheet music in text. The model writes this first.</dd></div>
+      <div><dt>Semantic tokens</dt><dd>A sketch of the sound: 25 codes a second saying roughly what should be heard (the voice,
+        the instruments, the rhythm) without the fine detail. This is where the song's character is decided.</dd></div>
+      <div><dt>Latent</dt><dd>The detailed sound in compressed form: 64 numbers for every 25th of a second. This is the layer
+        you watch come out of noise on the <a href="focus.html">Coming into focus</a> page.</dd></div>
+      <div><dt>Audio</dt><dd>What you hear, made from the latent by a decoder.</dd></div>
+    </dl>
+    <h3>What to do</h3>
+    <p>Hover anywhere to light the same moment through all four floors and read its lyric. Click to hear that phrase.
+      Press <kbd>P</kbd> to replay how the song was written, at the speed it happened.</p>
+    <p style="color:var(--muted)">Drag to turn the view, scroll to zoom. Press <kbd>?</kbd> to bring this back.</p>`);
   document.getElementById('runlabel').innerHTML = `<b>${D.run}</b> · audio ${D.seconds.toFixed(0)} s · score ${D.score.seconds.toFixed(0)} s (score time)`;
   const $ = (id) => document.getElementById(id);
 

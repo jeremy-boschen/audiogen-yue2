@@ -157,18 +157,21 @@ def cmd_publish(args):
     # No take map on the web: without every take it says nothing.
     _swap(out / "app" / "common.js", ", ['map.html', 'Take map', 'M']", "")
     index = out / "index.html"
-    _swap(index, "YuE2 generation microscope · Burn It Down", f"YuE2 generation microscope · {args.title}")
+    _swap(index, "YuE2 generation microscope · Burn It Down", "An exploration of how YuE2 generates songs")
     _swap(index, "<p>Three interactive 3D views of one take and its siblings: the acoustic solve resolving from noise, the four layers the\n"
                  "       model writes on one time axis, and every finished take placed by how its sound moves.",
-          "<p>Two interactive 3D views of one song as an AI music model (YuE2) makes it: the sound resolving from noise, and the\n"
-          "       four layers the model writes, on one time axis.")
+          f"<p>Two interactive 3D views of one song, <b>{args.title}</b>, as the open AI music model YuE2 makes it: the sound\n"
+          "       resolving from noise, and the four layers the model writes, on one time axis. Everything here was recorded\n"
+          "       from one real generation, without changing it.")
     start = index.read_text().index('    <a class="card" href="map.html">')
     end = index.read_text().index("</a>", start) + len("</a>\n")
     index.write_text(index.read_text()[:start] + index.read_text()[end:])
     _swap(index, ".grid { display: grid; grid-template-columns: repeat(3, 1fr);", ".grid { display: grid; grid-template-columns: repeat(2, 1fr);")
     _swap(index, '<div class="panel"><h3>Build</h3><ul id="build"></ul></div>',
-          f'<div class="panel"><h3>About</h3><ul><li>{args.about}</li>'
-          f'<li>Made on a Mac with a local build of YuE2; <a href="{args.home}">{args.home.split("//")[-1].rstrip("/")}</a></li></ul></div>')
+          f'<div class="panel"><h3>About</h3><ul><li>An exploration of how YuE2 generates songs. {args.about}</li>'
+          f'<li>YuE2 is made by <a href="https://huggingface.co/m-a-p">m-a-p</a>; this is not their project. It was run and '
+          f'recorded on a Mac with a local build of the model.</li>'
+          f'<li><a href="{args.home}">{args.home.split("//")[-1].rstrip("/")}</a></li></ul></div>')
     text = index.read_text()
     start = text.index("  document.getElementById('build').innerHTML")
     end = text.index("`;\n", start) + len("`;\n")

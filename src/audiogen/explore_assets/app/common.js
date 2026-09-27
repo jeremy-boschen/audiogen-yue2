@@ -240,5 +240,28 @@
     g.fillStyle = '#fff'; g.fillRect(x - 0.75, 0, 1.5, h);
   }
 
-  window.EX = { T, reduced, DPR, PALETTE, GLSL_RAMP, rampJS, css, decode, fmt, num, stage, labels, dust, floor, nav, tip, spark };
+  // "How to read this": plain words for people who have never seen a diffusion model. It opens by
+  // itself the first time a page is visited (remembered per page) and from the ? in the top bar.
+  function help(key, html) {
+    const card = document.createElement('div');
+    card.className = 'helpcard';
+    card.setAttribute('role', 'dialog');
+    card.setAttribute('aria-label', 'How to read this page');
+    card.innerHTML = `<button class="btn helpclose" aria-label="Close">✕</button>${html}
+      <div class="row" style="margin-top:14px"><button class="btn primary helpgo">Got it</button></div>`;
+    document.body.appendChild(card);
+    const seen = 'microscope-help-' + key;
+    const show = (on) => { card.classList.toggle('on', on); if (!on) { try { localStorage.setItem(seen, '1'); } catch (e) { /* private mode */ } } };
+    card.querySelector('.helpclose').onclick = card.querySelector('.helpgo').onclick = () => show(false);
+    window.addEventListener('keydown', (e) => { if (e.key === 'Escape') show(false); if (e.key === '?') show(!card.classList.contains('on')); });
+    const button = document.createElement('button');
+    button.className = 'btn helpbtn'; button.textContent = '?'; button.title = 'How to read this page (?)';
+    button.onclick = () => show(!card.classList.contains('on'));
+    (document.querySelector('.top') || document.body).appendChild(button);
+    let first = true;
+    try { first = !localStorage.getItem(seen); } catch (e) { /* private mode: show it */ }
+    if (first) show(true);
+  }
+
+  window.EX = { T, reduced, DPR, PALETTE, GLSL_RAMP, rampJS, css, decode, fmt, num, stage, labels, dust, floor, nav, tip, spark, help };
 })();

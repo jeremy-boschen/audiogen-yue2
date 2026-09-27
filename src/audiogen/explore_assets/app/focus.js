@@ -4,6 +4,32 @@
   const { T, reduced, decode, fmt, num, rampJS, css } = EX;
   const D = window.FOCUS;
   EX.nav('focus');
+  EX.help('focus', `
+    <h2>Watching a song come into focus</h2>
+    <p>This is an exploration of how YuE2, an open AI music model, generates a song. Everything here was recorded from
+      one real generation, without changing it.</p>
+    <p>YuE2 doesn't record a song from start to finish. It first decides what the song is: the notes,
+      the words, the arrangement. Then it makes the sound for the whole song at once, the way a photo develops: it starts
+      from pure noise and cleans it up in 32 steps. This page lets you stop at any step, look at it, and listen to it.</p>
+    <h3>The landscape</h3>
+    <p>It is the sound, drawn as terrain. <b>Left to right</b> is time through the song. <b>Front to back</b> is pitch: bass at
+      the front, the highest sounds at the back. <b>Height</b> is how loud that pitch is at that moment. At step 0 it is flat
+      static; by step 32 it is the song.</p>
+    <h3>What to press</h3>
+    <dl>
+      <div><dt>▶ and the step slider</dt><dd>Press play, then drag the slider (or use ← →) to move between steps while it plays.
+        The sound switches in place.</dd></div>
+      <div><dt>Resolve</dt><dd>Plays the whole process for you: step 0 to 32, with the sound following.</dd></div>
+      <div><dt>State · Predicted final · Finished</dt><dd><b>State</b> is the song exactly as it is at this step: still partly
+        noise until the last few steps. <b>Predicted final</b> is where the model thinks it is heading from here, often
+        recognisable surprisingly early. <b>Finished</b> is the end result.</dd></div>
+      <div><dt>Ghost overlay</dt><dd>A see-through copy of the other view floating above: in State, where it is heading; in
+        Predicted final, where it actually is. The gap is how far it still has to go.</dd></div>
+      <div><dt>Settling colour</dt><dd>Colour means that part of the sound already matches the finished song; cold blue means it
+        is still forming. The low end and the beat tend to lock in first, fine detail last.</dd></div>
+    </dl>
+    <p style="color:var(--muted)">Drag to turn the view, scroll to zoom, click the land to jump to that moment. Press
+      <kbd>?</kbd> to bring this back. The numbers in the side panel measure the signal; they are not verdicts on how it sounds.</p>`);
   document.getElementById('runlabel').innerHTML = `<b>${D.run}</b> · ${D.seconds.toFixed(0)} s · ${D.steps} steps`;
 
   const C = D.columns, B = D.bands, S = D.steps, NS = S + 1;
