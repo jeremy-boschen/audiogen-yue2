@@ -240,8 +240,10 @@ allows 1 GB): it keeps 125 MB of binaries out of the site repo and serves them f
    `~/dev/projects/audiogen/web`, where playwright is installed): pages load, audio plays and
    seeks, and there are no console errors.
 
-Nothing is live yet. As of 2026-09-27, `www.newty.coffee/yue2-microscope/` returns 404 and the
-bucket holds only a test object.
+Live since 2026-09-27: https://www.newty.coffee/yue2-microscope/ (www commit 39b7741), with its 132
+audio files under `newty-media/yue2-microscope/`. The upload used one `wrangler r2 object put` per file
+with `--content-type audio/mp4`, eight at a time. Files from earlier builds are never deleted
+automatically; the names are content hashes, so new builds upload alongside them.
 
 ## Tests
 
