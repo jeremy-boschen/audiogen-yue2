@@ -367,6 +367,7 @@ def focus_data(run: Path, out: Path, cache: Path | None = None) -> dict:
                   "finished": rel(listening[-1], out)},
         "audio_note": "peak-normalized listening copies (-1 dBFS); 'finished' is step 32, which is the take",
         "listening": listening_marks(run),
+        "machine": machine_marks(run),
         # Where the local server writes marks (bin/explore.py serve); publish clears it.
         "annotate": rel(run, out) if (run / "analysis/annotations.json").exists() else None,
     }
@@ -421,6 +422,21 @@ def fold_pickups(phrases: list[dict]) -> list[dict]:
             continue
         out.append(phrase)
     return out
+
+
+def machine_marks(run: Path) -> dict | None:
+    """Where machine listeners first picked each thing out (bin/machine_listen.py), per view.
+
+    Kept apart from a listener's marks: these are a recognizer, a voice detector and a
+    transcriber comparing each step with their own reading of the finished take.
+    """
+    found = read_json(Path(run) / "analysis/machine_marks.json")
+    if not found:
+        return None
+    says = {f: f"{rule['says']} ({rule['by']}; {rule['score']} ≥ {rule['threshold']:g} from here on)"
+            for f, rule in found["listeners"].items()}
+    return {"says": says, **{view: {f: s for f, s in found[view]["first"].items() if s is not None}
+                             for view in ("state", "predicted")}}
 
 
 def stack_data(run: Path, out: Path, cache: Path | None = None) -> dict:

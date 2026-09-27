@@ -26,8 +26,10 @@
         recognizable surprisingly early. <b>Finished</b> is the end result.</dd>
       <dt>Ghost overlay</dt><dd>A see-through copy of the other view floating above: in State, where it is heading; in
         Predicted final, where it actually is. The gap is how far it still has to go.</dd>
-      <dt>Dots on the dial</dt><dd>Where a listener first heard something: the beat, a voice, the words. They come
-        from someone listening, not from a measurement. Click a row below the dial to jump there.</dd>
+      <dt>Marks on the dial</dt><dd>Where something first became hearable: the beat, a voice, the words. <b>Gold dots</b>
+        were marked by someone listening. <b>Blue rings</b> are machines: a speech recognizer, a voice detector and a music
+        transcriber, each comparing a step with its own reading of the finished song. Machines and ears often disagree;
+        both are shown. Click a row below the dial to jump there.</dd>
       <dt>Settling color</dt><dd>Color means that part of the sound already matches the finished song; gray and glittering means it
         is still forming. The low end and the beat tend to lock in first, fine detail last.</dd>
     </dl>
@@ -448,16 +450,31 @@
   }
   const markLayer = document.createElementNS('http://www.w3.org/2000/svg', 'g');
   ring.appendChild(markLayer);
+  // Machine listeners' first steps (bin/machine_listen.py), shown apart from a listener's: hollow rings, "machine" rows.
+  const MACHINE = D.machine;
+  function machineFirst(view) {
+    const byStep = {};
+    Object.entries((MACHINE && MACHINE[view]) || {}).forEach(([f, s]) => (byStep[s] = byStep[s] || []).push(f));
+    return byStep;
+  }
   function drawMarks() {
-    const byStep = firstHeard(viewKey()), now = Math.round(ui.target);
+    const view = viewKey(), byStep = firstHeard(view), byMachine = machineFirst(view), now = Math.round(ui.target);
+    const reached = (s) => (+s <= now ? ' reached' : '');
     markLayer.innerHTML = Object.entries(byStep).map(([s, names]) => {
       const [x, y] = pt(ang(+s), R - 13);
-      return `<g class="heardmark${+s <= now ? ' reached' : ''}"><circle cx="${x}" cy="${y}" r="3.2"/><title>Step ${s}: ${names.join(', ')}</title></g>`;
+      return `<g class="heardmark${reached(s)}"><circle cx="${x}" cy="${y}" r="3.2"/><title>Step ${s}: ${names.join(', ')}</title></g>`;
+    }).join('') + Object.entries(byMachine).map(([s, fs]) => {
+      const [x, y] = pt(ang(+s), R - 22);
+      return `<g class="machinemark${reached(s)}"><circle cx="${x}" cy="${y}" r="3"/><title>Step ${s}, a machine: ${fs.map((f) => LABEL[f] || f).join(', ')}</title></g>`;
     }).join('');
-    const rows = Object.entries(byStep);
+    const rows = [
+      ...Object.entries(byStep).map(([s, names]) => ({ s: +s, who: 'listener', text: names.join(', '), tip: 'Marked by someone listening' })),
+      ...Object.entries(byMachine).map(([s, fs]) => ({ s: +s, who: 'machine', text: fs.map((f) => LABEL[f] || f).join(', '),
+        tip: fs.map((f) => `${LABEL[f] || f}: ${MACHINE.says[f]}`).join('\n') })),
+    ].sort((a, b) => a.s - b.s || (a.who === 'listener' ? -1 : 1));
     $('heard').innerHTML = rows.length
-      ? `<div class="dim">First heard</div>` + rows.map(([s, names]) =>
-          `<button class="heardrow${+s <= now ? ' reached' : ''}" data-step="${s}"><b>${s}</b><span>${names.join(', ')}</span></button>`).join('')
+      ? `<div class="dim">First heard</div>` + rows.map((r) =>
+          `<button class="heardrow ${r.who}${reached(r.s)}" data-step="${r.s}" title="${r.tip.replace(/"/g, '&quot;')}"><b>${r.s}</b><span>${r.text}</span><span class="who ${r.who}">${r.who}</span></button>`).join('')
       : canMark ? '<div class="dim">Nothing marked yet. Play, and press M at the step where you first hear something.</div>' : '';
     $('heard').querySelectorAll('.heardrow').forEach((b) => (b.onclick = () => setStep(+b.dataset.step)));
   }

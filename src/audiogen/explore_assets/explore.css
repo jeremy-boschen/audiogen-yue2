@@ -142,6 +142,14 @@ kbd { font: 600 10.5px -apple-system, sans-serif; border: 1px solid var(--line);
 /* Listening marks on the step dial: where a listener first heard something. */
 .heardmark circle { fill: #ffd98f; animation: heardpulse 1.8s ease-in-out infinite; pointer-events: none; }
 .heardmark.reached circle { fill: #fff; animation-duration: 3.2s; }
+/* a machine's mark: a hollow ring, blue like the stack's "heard" tag, a little inside the listener's dots */
+.machinemark circle { fill: none; stroke: #8fd8ff; stroke-width: 1.4; opacity: .85; pointer-events: none; }
+.machinemark.reached circle { stroke: #d8f3ff; opacity: 1; }
+.heardrow .who { margin-left: auto; font: 600 9px/14px -apple-system, sans-serif; letter-spacing: .06em; text-transform: uppercase;
+                 padding: 0 5px; border-radius: 4px; border: 1px solid; flex: none; }
+.heardrow .who.listener { color: #ffd98f; border-color: rgba(255, 217, 143, .4); }
+.heardrow .who.machine { color: #a8e6ff; border-color: rgba(90, 200, 255, .35); }
+.heardrow.machine b { color: #8fd8ff; }
 @keyframes heardpulse { 0%, 100% { opacity: .35; } 50% { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .heardmark circle { animation: none; opacity: .9; } }
 .heard { margin-top: 10px; display: grid; gap: 3px; }
@@ -182,8 +190,8 @@ input[type=range] { width: 100%; accent-color: var(--pink); }
 .lyric { font: 14px/1.35 var(--serif); color: #f1e9ff; }
 .lyric.none { color: var(--faint); font-style: italic; font-size: 12px; font-family: -apple-system, sans-serif; }
 /* words a recognizer heard in the finished take: never styled as the lyrics */
-.heard { display: block; color: var(--muted); font-size: 11.5px; line-height: 1.35; margin-top: 2px; }
-.heard.alone { color: #d9cdf2; font-size: 12.5px; margin-top: 0; }
+.heardwords { display: block; color: var(--muted); font-size: 11.5px; line-height: 1.35; margin-top: 2px; }
+.heardwords.alone { color: #d9cdf2; font-size: 12.5px; margin-top: 0; }
 .heardtag { display: inline-block; padding: 0 5px; margin-right: 3px; border-radius: 4px; font: 600 9px/14px -apple-system, sans-serif;
             letter-spacing: .06em; text-transform: uppercase; color: #a8e6ff; background: rgba(90, 200, 255, .12);
             border: 1px solid rgba(90, 200, 255, .3); vertical-align: 1px; }

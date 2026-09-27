@@ -251,7 +251,7 @@
   $('phrases').innerHTML = phrases.map((p) => `<div class="item" data-i="${p.i}">
       <span class="dot" style="background:${css(rampJS(0.45 + (p.notes_per_syllable ? Math.min(1, (p.notes_per_syllable - 0.6) / 1.2) : 0) * 0.55))}"></span>
       <span class="t">${p.lyrics ? `<span class="lyric">${p.lyrics}</span>` : p.heard ? '' : `<span class="lyric none">${D.heard ? 'no words heard' : 'no lyric line paired'}</span>`}
-        ${p.heard ? `<span class="heard ${p.lyrics ? '' : 'alone'}"><span class="heardtag">heard</span> ${asWritten(p) ? 'as written' : esc(p.heard)}</span>` : ''}
+        ${p.heard ? `<span class="heardwords ${p.lyrics ? '' : 'alone'}"><span class="heardtag">heard</span> ${asWritten(p) ? 'as written' : esc(p.heard)}</span>` : ''}
         <small>${p.section} · phrase ${p.number} · ${fmt(p.start)}${p.start >= D.seconds ? ' · past the end of the audio' : ''}</small></span>
       <span class="n">${p.notes_per_syllable != null ? p.notes_per_syllable.toFixed(2) + ' n/s' : '–'}</span></div>`).join('');
   const items = [...document.querySelectorAll('#phrases .item')];
@@ -313,7 +313,7 @@
     $('moment').innerHTML = `
       <div class="m-chips">${s ? `<span class="chip">${s.label}</span>` : ''} ${p && p.bin ? `<span class="chip">${p.notes_per_syllable.toFixed(2)} notes/syllable · ${p.bin}</span>` : ''}</div>
       <div class="m-lyric lyric ${p && p.lyrics ? '' : 'none'}">${p ? p.lyrics || 'no lyric line paired with this phrase' : 'no sung phrase here in the score'}</div>
-      ${D.heard ? `<div class="m-line heard"><span class="heardtag">heard</span> ${p && p.heard ? esc(p.heard) : '<span style="color:var(--faint)">nothing</span>'}</div>` : ''}
+      ${D.heard ? `<div class="m-line heardwords"><span class="heardtag">heard</span> ${p && p.heard ? esc(p.heard) : '<span style="color:var(--faint)">nothing</span>'}</div>` : ''}
       <div class="m-line note">${p ? `phrase ${p.number} of the ${p.section}: ${p.melody_notes} notes, ~${p.syllables} syllables, ${num(p.seconds, 1)} s` : ''}</div>
       <div class="m-line note" style="margin-top:6px">semantic: ${tok}</div>
       <div class="m-line note">latent: ${frame < LF ? `frame ${frame} of ${LF}` : 'past the end'} · audio: ${t < D.seconds ? fmt(t) : 'ended at ' + fmt(D.seconds)}</div>`;
