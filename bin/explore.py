@@ -17,6 +17,7 @@ OUT/cache/ keyed by file size and mtime.
 """
 import argparse
 import datetime
+import functools
 import pathlib
 import sys
 
@@ -99,6 +100,15 @@ def _swap(path: pathlib.Path, old: str, new: str) -> None:
     path.write_text(text.replace(old, new))
 
 
+AAC_ARGS = ["-c:a", "aac", "-b:a", "160k", "-map_metadata", "-1", "-fflags", "+bitexact", "-movflags", "+faststart"]
+
+
+@functools.cache
+def _ffmpeg_version() -> bytes:
+    import subprocess
+    return subprocess.run(["ffmpeg", "-version"], capture_output=True, check=True).stdout.split(b"\n")[0]
+
+
 def _publish_audio(value, out: pathlib.Path, base: str, done: dict):
     """Replace every audio path in a data tree with its AAC copy under out/media/."""
     import hashlib
@@ -111,14 +121,14 @@ def _publish_audio(value, out: pathlib.Path, base: str, done: dict):
         return value
     if value not in done:
         source = (out / value).resolve()
-        digest = hashlib.sha256(source.read_bytes()).hexdigest()[:16]   # named by content: cache forever
+        # Named by what makes the bytes: the source, the encoder settings and the encoder's version. The URLs are
+        # cached forever, so a change to any of them must give a new name.
+        digest = hashlib.sha256(source.read_bytes() + " ".join(AAC_ARGS).encode() + _ffmpeg_version()).hexdigest()[:16]
         name = f"{digest}.m4a"
         target = out / "media" / name
         if not target.exists():
             target.parent.mkdir(exist_ok=True)
-            subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(source), "-c:a", "aac", "-b:a", "160k",
-                            "-map_metadata", "-1", "-fflags", "+bitexact", "-movflags", "+faststart", str(target)],
-                           check=True)
+            subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(source), *AAC_ARGS, str(target)], check=True)
         done[value] = name
     return f"{base}/{done[value]}"
 
@@ -130,6 +140,10 @@ def cmd_publish(args):
     run = pathlib.Path(args.run).resolve()
     if not explore.is_finished(run):
         sys.exit(f"{run}: metadata.json has no 'finished'")
+    if run != DEFAULT_RUN.resolve() and args.title is None:
+        sys.exit("name the song for the page: --title (and --take)")
+    if args.title is None:
+        args.title, args.take = "Slow Down", args.take or 2
     out = args.out
     if out.exists():
         if not (out / ".microscope-export").exists():
@@ -162,12 +176,12 @@ def cmd_publish(args):
     # No take map on the web: without every take it says nothing.
     _swap(out / "app" / "common.js", ", ['map.html', 'Take map', 'M']", "")
     index = out / "index.html"
-    _swap(index, "YuE2 generation microscope · Burn It Down", "An exploration of how YuE2 generates songs")
-    _swap(index, "<p>Three interactive 3D views of one take and its siblings: the acoustic solve resolving from noise, the four layers the\n"
-                 "       model writes on one time axis, and every finished take placed by how its sound moves.",
+    _swap(index, "YuE2 generation microscope", "An exploration of how YuE2 generates songs")
+    _swap(index, "<p>Three interactive 3D views: one take of one song resolving from noise, the four layers the model writes for it on one\n"
+                 "       time axis, and every finished take of another song placed by how its sound moves. Each card names its song.",
           f"<p>Two interactive 3D views of one song, <b>{args.title}</b>, as the open AI music model YuE2 makes it: the sound\n"
-          "       resolving from noise, and the four layers the model writes, on one time axis. Everything here was recorded\n"
-          "       from one real generation, without changing it.")
+          "       resolving from noise, and the four layers the model writes, on one time axis. Everything here comes from one\n"
+          "       real generation, saved as it ran; the audio is volume-matched and compressed for the web.")
     start = index.read_text().index('    <a class="card" href="map.html">')
     end = index.read_text().index("</a>", start) + len("</a>\n")
     index.write_text(index.read_text()[:start] + index.read_text()[end:])
@@ -259,8 +273,8 @@ def main():
     sub.add_parser("serve").add_argument("--port", type=int, default=8771)
     publish = sub.add_parser("publish", help="one take's focus and stack views as a site for the web")
     publish.add_argument("run", nargs="?", default=str(DEFAULT_RUN))
-    publish.add_argument("--title", default="Slow Down")
-    publish.add_argument("--take", type=int, default=2)
+    publish.add_argument("--title", help="the song's name; required unless publishing the default run")
+    publish.add_argument("--take", type=int)
     publish.add_argument("--media-base", default="media",
                          help="where the audio will be served from: 'media' (beside the pages) or a URL")
     publish.add_argument("--home", default="https://www.newty.coffee/")

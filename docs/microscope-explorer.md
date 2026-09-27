@@ -21,7 +21,8 @@ publishing to www.newty.coffee.
 | Audio on the web | Cloudflare R2 bucket `newty-media`, prefix `yue2-microscope/`, served at `media.newty.coffee` |
 
 `RUNS` below means `~/dev/projects/audiogen/output/microscope-runs`, and `RUN` means the recorded
-run folder. `bin/explore.py` uses `DEFAULT_RUN` (the Slow Down take 2 run) when no run is given.
+run folder. `publish` and `all` use `DEFAULT_RUN` (the Slow Down take 2 run) when no run is given; `focus` and
+`stack` need one.
 
 ## The pages
 
@@ -64,9 +65,10 @@ three.js is vendored under `explore_assets/vendor/three/`; nothing loads from a 
   texture is columns × bands × 33 steps, and the vertex shader moves between steps.
   - `W = 150` wide and `DEPTH = 78` deep, so the Hz bands spread out; `H = 17` tall.
   - Bass is at the front. Depth is log-frequency, from 40 Hz to 16 kHz.
-- **Settling color:** each band's energy envelope is correlated with the finished take's
+- **Settling color:** each band's level envelope over the whole song is correlated with step 32's
   (`settle_state`, `settle_predicted`). Unsettled land is frost teal (`FROST` in the fragment
-  shader) and blends toward the color that spot has in the finished song as its band settles.
+  shader) and blends toward the color that spot has in the finished song as its band settles. It is a
+  comparison with the end result, per band and across the whole song, not a per-spot or per-instrument reading.
 - **Ghost:** the other view, drawn as contour lines above the land.
 - **Settling wall:** one bar per band at the left edge, showing the same correlation.
 - **Hz bands:** `PITCH` holds five named bands (bass, body, voice & lead, bite, air), each with
@@ -76,11 +78,18 @@ three.js is vendored under `explore_assets/vendor/three/`; nothing loads from a 
     and colors the settling wall.
 - **Time bar and arrangement bar:** in front of the land. Sections come from the score, so they
   are in score time.
-- **Audio:** Web Audio. Every step's file is fetched up front, and all layers are scheduled on
-  one clock, so a step change is a crossfade.
-  - Resolve plays the song from the top and reaches step 32 one second before the last chorus
-    (`RESOLVE_BY`, taken from the sections).
-- **The listening game:** `CUES` come from `D.entries`, the times each part first comes in.
+- **Audio:** Web Audio. All layers are scheduled on one clock, so a step change is a crossfade.
+  - The web build (`.m4a`) downloads every file before anything plays, behind the "Preparing the song"
+    bar (bytes counted against `audio_bytes`, which publish writes). Then step 0 and the finished take
+    are decoded and Play and Resolve turn on. Other files decode when their step is wanted, eight held
+    at a time: decoding all 66 would hold about 2.3 GB.
+  - The local build points at WAV listening copies (~35 MB each), loaded on demand with the steps
+    either side decoded ahead.
+  - Resolve takes its step from the song's clock (step × pace), so step 32 lands one second before the
+    last chorus (`RESOLVE_BY`, from the sections) whichever step it starts from.
+  - An "I hear" tap records the step that is sounding, and the buttons wait while a new step loads.
+- **The listening game:** `CUES` come from `D.entries`, estimated times each part first comes in. The
+  dots record where the listener tapped on that pass, not the earliest step a part can be heard.
   - A part's "I hear…" button appears once the song reaches that part, up to three at a time.
   - A tap stores `{step, at}` for that part, flies a dot to the time bar, puts a pin there, and
     puts a dot on the dial at the step.
@@ -109,16 +118,19 @@ feeds the index.
 
 | Field | From |
 |---|---|
-| state / predicted landscapes, settle maps | the per-step listening audio (`flow_audio_listening`, `flow_predicted_audio_listening`), as envelope grids |
-| `metrics` | `analysis/metrics.csv` |
+| state / predicted landscapes, settle maps | the per-step raw audio (`flow_audio_raw/chunk_000`, `flow_predicted_audio_raw/chunk_000`), as envelope grids |
+| `metrics` | `flow/chunk_000/metrics.json`, plus `analysis/envelopes.json` and `analysis/bands.json` when present |
 | `sections` | the plan's ABC score, in score time |
 | `listening` | `analysis/annotations.json`: the author's own marks. Publish clears them |
 | `machine` | `analysis/machine_marks.json`. Still built, but the focus page no longer shows it |
 | `entries` | `analysis/entries.json`: when each part comes in |
-| `audio` | paths to every step's audio, relative to the build folder |
+| `audio` | paths to every step's peak-normalized listening copy (`flow_audio_listening`, …), relative to the build folder |
 
-Envelope grids are cached in `00_explore/cache/`, keyed by file size and mtime. Both builds use
-this cache.
+`focus_data` reads `chunk_000` only and refuses a run with more than one acoustic chunk.
+
+Envelope grids are cached in `00_explore/cache/`, keyed by resolved path, file size, mtime and the
+grid parameters. Publish and the default local build share it; a local build with its own `--out` uses
+its own.
 
 ## The analysis scripts
 
@@ -131,6 +143,8 @@ Run these on a run folder before building. Each writes into `RUN/analysis/`.
 | `bin/find_entries.py RUN [--by-ear id=seconds]` | this repo's `.venv`; separation shells out to `~/dev/ai/demucs/.venv` | `entries.json`, `stems/` | When each part first comes in, in song time |
 
 How `find_entries.py` works:
+- The results are estimates: stem activity is not proof that the named instrument is audible, and
+  htdemucs_6s is known to bleed, piano especially.
 - It separates the finished take with htdemucs_6s. Stems are used only to detect entries; nobody
   listens to them.
 - A stem has entered once its level keeps coming back above −20 dB (relative to its own 95th
@@ -170,18 +184,20 @@ Run all commands from `~/dev/projects/audiogen-yue2`.
    `.microscope-export` marker.
 2. It copies the assets and drops the Take map.
 3. It builds focus and stack data. Your own marks are stripped and the annotate endpoint is
-   switched off, so a visitor's marks stay in their browser. The run is labeled
-   "Slow Down, take 2".
-4. It converts every audio file the data refers to into AAC 160k `.m4a`, named by content hash
-   (`media/<sha256[:16]>.m4a`), and rewrites each path to `<media-base>/<name>`. Content-hashed
-   names can be cached forever.
+   switched off, so a visitor's marks stay in their browser. The page is labeled with `--title` and
+   `--take`, which are required for any run other than `DEFAULT_RUN` (labeled "Slow Down, take 2").
+4. It converts every audio file the data refers to into AAC 160k `.m4a` and rewrites each path to
+   `<media-base>/<name>`. The name hashes the source bytes, the encoder settings (`AAC_ARGS`) and the
+   ffmpeg version (`media/<sha256[:16]>.m4a`), so any change that could change the output gives a new
+   name, and the files can be cached forever.
 5. It rewrites the index for the web (`_swap`) with an intro, an About panel and two columns.
    `_swap` fails loudly if the text it expects has changed, so edits to `index.html` may need a
    matching edit in `cmd_publish`.
 6. It writes `media-manifest.json` (base, files, bytes).
 7. **The leak scan:** the publish fails if any shipped `.html`, `.js`, `.css` or `.json`
    contains the home path, `/Users/`, `localhost`, `127.0.0.1`, `.internal` or `bin/explore.py`.
-   Keep these out of shipped assets, comments included.
+   Files under `vendor/three/` are skipped. It checks those fixed strings only. Keep them out of
+   shipped assets, comments included.
 
 Check a build with `--media-base media` (the default) and a plain static server:
 
@@ -189,23 +205,25 @@ Check a build with `--media-base media` (the default) and a plain static server:
 cd RUNS/00_publish && python3 -m http.server 8000     # http://127.0.0.1:8000/
 ```
 
-Publish deletes and recreates the folder. A server that was already running keeps serving the
-deleted folder, so restart it after every publish.
+Publish deletes and recreates the folder. A server started from inside it, as above, keeps serving
+the deleted folder, so restart it after every publish.
 
-As of 2026-09-27, the build is 124 MB: about 5 MB of pages and 66 audio files (119 MB) in `media/`.
+As of 2026-09-27, the build is 129.5 MB (decimal): 125.2 MB of audio in 66 files in `media/`, and
+4.4 MB of pages and data. The focus page downloads 123.2 MB of that before it plays.
 
 ## Publishing to www.newty.coffee
 
-The pages and the audio go to different places, because the audio is too big for GitHub Pages.
+The pages and the audio go to different places. That is a choice, not a size limit (GitHub Pages
+allows 1 GB): it keeps 125 MB of binaries out of the site repo and serves them from R2's cache.
 
 1. **Build for the web:**
-   `bin/explore.py publish --media-base https://media.newty.coffee/yue2-microscope`
+   `.venv/bin/python bin/explore.py publish --media-base https://media.newty.coffee/yue2-microscope`
 2. **Upload the audio to R2:** every file in `00_publish/media/` goes to bucket `newty-media`,
    under `yue2-microscope/`, with a long cache lifetime (the names are content hashes). For
    example:
    `npx wrangler r2 object put newty-media/yue2-microscope/<file> --file <path> --remote --cache-control "public, max-age=31536000, immutable"`
-   CORS on the bucket already allows `https://www.newty.coffee`, because the apex domain
-   redirects to www.
+   CORS on the bucket was set to allow `https://www.newty.coffee` (the apex domain redirects to
+   www); check it again before the first upload.
 3. **Pages to GitHub:** copy everything in `00_publish/` except `media/` into repo
    `newty-coffee/www` under `yue2-microscope/`, then commit and push to `main`. GitHub Pages
    serves it at `https://www.newty.coffee/yue2-microscope/`.
@@ -222,5 +240,6 @@ bucket holds only a test object.
 .venv/bin/python -m pytest -q        # includes tests/test_explore.py
 ```
 
-The tests cover the Python builders. The page code is checked by building both targets and
-driving them with playwright: screenshots, frame-by-frame position traces, and console errors.
+The tests cover the Python builders only. There is no committed browser test suite: the page code
+has been checked by hand, building both targets and driving them with playwright (screenshots,
+frame-by-frame position traces, console errors, throttled downloads).

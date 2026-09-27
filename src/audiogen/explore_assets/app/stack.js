@@ -6,25 +6,26 @@
   EX.nav('stack');
   EX.help('stack', `
     <h2>Four layers of one song</h2>
-    <p>This is an exploration of how YuE2, an open AI music model, generates a song. Everything here was recorded from
-      one real generation, without changing it.</p>
+    <p>This is an exploration of how YuE2, an open AI music model, generates a song. Everything here comes from one real
+      generation, saved as it ran.</p>
     <p>Before any sound exists, the model writes the song down in layers, each made from the one above it. This page stacks
       them like the floors of a building, all on one timeline: <b>left to right is time</b>.</p>
     <dl>
-      <dt>Score</dt><dd>The plan: melody, chords and lyrics, written as sheet music in text. The model writes this first.</dd>
-      <dt>Semantic tokens</dt><dd>A sketch of the sound: 25 codes a second saying roughly what should be heard (the voice,
-        the instruments, the rhythm) without the fine detail. This is where the song's character is decided.</dd>
+      <dt>Score</dt><dd>The plan: melody, chords and sections, written as sheet music in text. The lyrics are given
+        separately. The model normally writes this first; this take reused a score written earlier.</dd>
+      <dt>Semantic tokens</dt><dd>A sketch of the sound: 25 codes a second that steer the detailed sound made next. The
+        codes are labels, not amounts, so their heights and colors here are only a way to draw them.</dd>
       <dt>Latent</dt><dd>The detailed sound in compressed form: 64 numbers for every 25th of a second. This is the layer
         you watch come out of noise on the <a href="focus.html">Coming into focus</a> page.</dd>
       <dt>Audio</dt><dd>What you hear, made from the latent by a decoder.</dd>
     </dl>
-    <p>Each phrase shows its line from the lyrics when the plan's phrases and the lyric lines match one for one. Under
-      it, <span class="heardtag">heard</span> is what a speech recognizer picked out of the finished song at that
-      point: what actually came out, which can differ from the lyrics. It can also mishear.</p>
+    <p>Each phrase shows its line from the lyrics when the plan's phrases and the lyric lines match one for one, going by
+      the score's timing, not by listening to the singing. Under it, <span class="heardtag">recognized</span> is what a
+      speech recognizer picked out of the finished song there. It can differ from the lyrics, and it can mishear.</p>
     `, `
     <h3 style="margin-top:0">What to do</h3>
     <p>Hover anywhere to light the same moment through all four floors and read its lyric. Click to hear that phrase.
-      Press <kbd>P</kbd> to replay how the song was written, at the speed it happened.</p>
+      Press <kbd>P</kbd> for a sped-up replay of how the song was generated.</p>
     <p style="color:var(--muted)">Drag to turn the view, scroll to zoom. Press <kbd>?</kbd> to bring this back.</p>`);
   document.getElementById('runlabel').innerHTML = `<b>${D.run}</b> · audio ${D.seconds.toFixed(0)} s · score ${D.score.seconds.toFixed(0)} s (score time)`;
   const $ = (id) => document.getElementById(id);
@@ -250,16 +251,16 @@
   $('phrasecount').innerHTML = `${phrases.length} · ${EX.g('scoretime', 'score time')} · ${EX.g('nps', 'notes per syllable')}`;
   $('phrases').innerHTML = phrases.map((p) => `<div class="item" data-i="${p.i}">
       <span class="dot" style="background:${css(rampJS(0.45 + (p.notes_per_syllable ? Math.min(1, (p.notes_per_syllable - 0.6) / 1.2) : 0) * 0.55))}"></span>
-      <span class="t">${p.lyrics ? `<span class="lyric">${p.lyrics}</span>` : p.heard ? '' : `<span class="lyric none">${D.heard ? 'no words heard' : 'no lyric line paired'}</span>`}
-        ${p.heard ? `<span class="heardwords ${p.lyrics ? '' : 'alone'}"><span class="heardtag">heard</span> ${asWritten(p) ? 'as written' : esc(p.heard)}</span>` : ''}
+      <span class="t">${p.lyrics ? `<span class="lyric">${p.lyrics}</span>` : p.heard ? '' : `<span class="lyric none">${D.heard ? 'no words recognized here' : 'no lyric line paired'}</span>`}
+        ${p.heard ? `<span class="heardwords ${p.lyrics ? '' : 'alone'}"><span class="heardtag">recognized</span> ${asWritten(p) ? 'as written' : esc(p.heard)}</span>` : ''}
         <small>${p.section} · phrase ${p.number} · ${fmt(p.start)}${p.start >= D.seconds ? ' · past the end of the audio' : ''}</small></span>
       <span class="n">${p.notes_per_syllable != null ? p.notes_per_syllable.toFixed(2) : '–'}</span></div>`).join('');
   const items = [...document.querySelectorAll('#phrases .item')];
   items.forEach((el) => (el.onclick = () => playPhrase(phrases[+el.dataset.i])));
   const notes = [];
-  if (D.heard) notes.push(`Heard words: ${esc(D.heard.source)}. Each phrase gets the words heard from its start until the next phrase starts.`);
+  if (D.heard) notes.push(`Recognized words (may be wrong): ${esc(D.heard.source)}. Each phrase gets the words recognized from its start until the next phrase starts.`);
   if (D.score.pitch_note) notes.push(D.score.pitch_note);
-  if (D.score.seconds > D.seconds) notes.push(`The score runs ${D.score.seconds.toFixed(1)} s in score time; the render is ${D.seconds.toFixed(0)} s, so the last ${(D.score.seconds - D.seconds).toFixed(0)} s of the plan were never sung.`);
+  if (D.score.seconds > D.seconds) notes.push(`The score runs ${D.score.seconds.toFixed(1)} s in score time; the render is ${D.seconds.toFixed(0)} s, which alone doesn't show which parts of the plan were performed.`);
   notes.push(`Song-level notes/syllable ${num(D.song.notes_per_syllable, 3)} (${D.song.melody_notes} notes, ~${D.song.syllables} syllables).`);
   $('datanote').innerHTML = notes.join('<br>');
 
@@ -357,10 +358,14 @@
   });
 
   // --- generation replay -------------------------------------------------------------------------
-  const plan = D.plan, sem = D.semantic_checkpoints;
+  // Sped up: the whole generation plays in ~22 s. Token progress follows the recorded checkpoints, straight
+  // lines between them. A score loaded from an earlier take has no clock, so it is shown whole from the start.
+  // The last stage is illustrated, not recorded: its real steps are on Coming into focus.
+  const reused = !D.plan.length || D.plan.some((c) => c.generation_seconds == null);
+  const plan = reused ? [] : D.plan, sem = D.semantic_checkpoints;
   const planEnd = plan.length ? plan[plan.length - 1].generation_seconds : 0;
   const semEnd = sem.length ? sem[sem.length - 1].generation_seconds : planEnd;
-  const GEN_END = semEnd * 1.12;                       // a tail for the acoustic solve, whose clock this run did not record here
+  const GEN_END = semEnd * 1.12;                       // an illustrative tail for the acoustic stage
   const lerpTable = (pts, x) => {                      // pts: [[x, y]...] sorted by x
     if (x <= pts[0][0]) return pts[0][1];
     for (let i = 1; i < pts.length; i++) if (x <= pts[i][0]) { const [a, ya] = pts[i - 1], [b, yb] = pts[i]; return ya + (yb - ya) * (x - a) / Math.max(1e-9, b - a); }
@@ -375,7 +380,7 @@
   function applyGen(g) {
     gen = g;
     const done = g >= GEN_END - 1e-6;
-    voiceNames.forEach((n) => (noteMeshes[n].count = done ? D.score.voices[n].t0.length : Math.floor(lerpTable(planPts(n), g))));
+    voiceNames.forEach((n) => (noteMeshes[n].count = done || reused ? D.score.voices[n].t0.length : Math.floor(lerpTable(planPts(n), g))));
     const tokens = done ? ids.length : Math.floor(lerpTable(semPts, g));
     semMesh.count = g < planEnd ? 0 : tokens;
     const dev = done ? 1 : Math.max(0, Math.min(1, (g - semEnd) / (GEN_END - semEnd)));
@@ -393,9 +398,9 @@
       phase = `Writing the ${EX.g('score', 'score')}, the sheet music, left to right: symbol ~${tok}.`;
     } else if (g < semEnd) {
       frontier.visible = true; frontier.position.set(xOf(tokens / D.semantic.rate), Y.semantic + 3, 0);
-      phase = `Drafting the sound as ${EX.g('tokens', 'tokens')}: ${tokens} of ${ids.length}, ${(tokens / D.semantic.rate).toFixed(0)} s of music so far.`;
-    } else { frontier.visible = false; phase = `Then the ${EX.g('latent', 'latent')} is cleaned up from static and decoded to audio (not timed here; that is <a href="focus.html">Coming into focus</a>).`; }
-    $('clock').textContent = done ? `written in ${fmt(semEnd)}${planEnd ? `, the score in ${fmt(planEnd)}` : ''}` : `writing… ${fmt(g)}`;
+      phase = `${reused ? `The ${EX.g('score', 'score')} was reused from an earlier take. ` : ''}Drafting the sound as ${EX.g('tokens', 'tokens')}: ${tokens} of ${ids.length}, ${(tokens / D.semantic.rate).toFixed(0)} s of music so far.`;
+    } else { frontier.visible = false; phase = `Then the ${EX.g('latent', 'latent')} is refined from noise and decoded to audio. Illustrated here, not recorded; the real steps are on <a href="focus.html">Coming into focus</a>.`; }
+    $('clock').textContent = done ? `tokens finished at ${fmt(semEnd)}${planEnd ? `, the score at ${fmt(planEnd)}` : ''}` : `${fmt(g)} into generation`;
     $('phase').innerHTML = phase;
     $('gen').value = Math.round(g / GEN_END * 1000);
     $('replay').textContent = replaying ? '❚❚' : '▶';

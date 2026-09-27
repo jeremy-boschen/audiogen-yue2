@@ -193,8 +193,7 @@ def score_layer(abc_text: str) -> dict:
     return {"tempo": score.headers.get("Q"), "key": score.headers.get("K"),
             "meter": score.headers.get("M"), "unit": score.headers.get("L"),
             "seconds_per_unit": spu, "voices": voices, "sections": section_spans(score, spu),
-            "seconds": max((v["seconds"] for v in voices.values()), default=0.0),
-            "pitch_note": "pitches as score.parse reads them: the key signature is not applied"}
+            "seconds": max((v["seconds"] for v in voices.values()), default=0.0)}
 
 
 def plan_reveal(prefixes: dict[int, str], final_voices: dict) -> list[dict]:
@@ -290,6 +289,9 @@ def _metric_rows(rows: list[dict]) -> dict[int, dict]:
 def focus_data(run: Path, out: Path, cache: Path | None = None) -> dict:
     """Per-step spectrogram terrains (state and predicted final), settling, metrics, audio paths."""
     run = Path(run)
+    chunks = sorted(p.name for p in (run / "flow").glob("chunk_*"))
+    if len(chunks) > 1:                                  # the page shows one chunk as the whole song
+        raise ValueError(f"{run}: {len(chunks)} acoustic chunks; the focus page supports single-chunk runs only")
     metrics = read_json(run / "flow/chunk_000/metrics.json") or {}
     steps = metrics.get("steps") or len(sorted((run / "flow_audio_raw/chunk_000").glob("step_*.wav"))) - 1
     names = [f"step_{s:02d}.wav" for s in range(steps + 1)]

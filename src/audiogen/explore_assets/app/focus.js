@@ -6,18 +6,22 @@
   EX.nav('focus');
   EX.help('focus', `
     <h2>Watching a song come into focus</h2>
-    <p>YuE2 is an open AI music model. It doesn't record a song from start to finish: it makes the sound of the whole song
-      at once, starting from pure static and cleaning it up in 32 ${EX.g('step', 'steps')}, the way a photo develops.
-      This page is one real song, recorded at every step.</p>
+    <p>YuE2 is an open AI music model. Its last stage makes the detailed sound: for this take it refines the whole song
+      together, starting from random noise, over 32 ${EX.g('step', 'steps')}, the way a photo develops. This page is one
+      real song, saved at every step.</p>
     <p>The landscape is the sound, a ${EX.g('spectrogram', 'spectrogram')} in 3D. <b>Left to right</b> is time, <b>front to
-      back</b> is pitch (bass in front), <b>height</b> is loudness. Gray glitter is still forming; color has settled.</p>
+      back</b> is frequency (bass in front), <b>height</b> is level. Frost-teal glitter doesn't match the finished song yet;
+      color does.</p>
     <p style="color:var(--muted)">Dotted words explain themselves when you point at them.</p>
     `, `
     <h3 style="margin-top:0">Try it</h3>
     <p>Press <b>Resolve</b> and listen to the song come out of the noise. Tap <b>I hear…</b> the moment you hear a voice,
       the drums or the chords: a pin marks that moment in the song, and a dot on the dial marks the step. As the dots gather,
       you can see the steps where the song really comes through.</p>
-    <p><b>State</b> is the song at this step, <b>Predicted</b> where it is heading, <b>Finished</b> the end result.</p>
+    <p>The buttons show up around when a machine estimated each part comes in; your dots record where you tapped on this
+      pass, not the earliest step a part could be heard.</p>
+    <p><b>State</b> is the song at this step, <b>Predicted</b> a one-jump guess at the end, <b>Finished</b> the end result.
+      Audio is volume-matched for listening and, on the web, compressed; the numbers come from the original audio.</p>
     `);
   document.getElementById('runlabel').innerHTML = `<b>${D.run}</b> · ${D.seconds.toFixed(0)} s · ${D.steps} steps`;
 
@@ -31,13 +35,13 @@
   const bandZ = D.band_lo_hz.map((lo, b) => (0.5 - lf(Math.sqrt(lo * D.band_hi_hz[b]))) * DEPTH);
   const zOfHz = (f) => (0.5 - lf(f)) * DEPTH;
   const xOfSec = (s) => (s / D.seconds - 0.5) * W;
-  // Five plain-named pitch bands: a ruler at the end of the land, and an optional tint across it.
+  // Five plain-named frequency bands: a ruler at the end of the land, and an optional tint across it.
   const PITCH = [
-    ['bass', 40, 250, '#ff3d6e', 'Kick drum, bass guitar and the bottom of the piano: what you feel as much as hear.', 'Fundamentals of the low instruments; most of the energy in a mix.'],
+    ['bass', 40, 250, '#ff3d6e', 'Kick drum, bass guitar and the bottom of the piano: what you feel as much as hear.', 'Fundamentals of the low instruments.'],
     ['body', 250, 1000, '#ff9a1f', 'The warmth and weight of voices, guitars and keys. Too much of it sounds muddy.', 'Low-mid fundamentals and their first harmonics.'],
-    ['voice & lead', 1000, 4000, '#22e6a0', 'Where the ear is most sensitive: the heart of the singing, the melody, and what makes words understandable.', 'Vowel formants; the ear\'s most sensitive range.'],
+    ['voice & lead', 1000, 4000, '#22e6a0', 'Where the ear is most sensitive: much of the singing and the melody, and what makes words clear.', 'Vowel formants; the ear\'s most sensitive range.'],
     ['bite', 4000, 10000, '#2fa8ff', 'Consonants like s and t, the snap of a snare, the attack of cymbals.', 'Sibilance and transients.'],
-    ['air', 10000, 16000, '#b45cff', 'Breath, shimmer and sparkle. Static hisses loudest up here, so it is the last to clear.', 'The top octave; noise dominates it early in the solve.'],
+    ['air', 10000, 16000, '#b45cff', 'Breath, shimmer and sparkle.', 'The top 0.7 octave of the view.'],
   ];
   const hzText = (f) => (f >= 1000 ? `${f / 1000}k` : `${f}`);
   PITCH.forEach(([name, lo, hi, , plain, tech], i) => { EX.GLOSSARY[`hz${i}`] = [`${hzText(lo)}–${hzText(hi)} Hz · ${name}`, plain, tech]; });
@@ -749,10 +753,10 @@
   const series = (set, fn) => D.metrics.map((m) => fn(m[set] || {}));
   const meanSettle = (arr, s) => { let t = 0; for (let b = 0; b < B; b++) t += arr[s * B + b]; return t / B / 255; };
   const METRICS = [
-    ['Waveform match', '<b>Waveform match</b> compares the actual sound wave at this step with the finished song\'s, moment by moment: 1 is identical, 0 unrelated. It stays low until late, because tiny timing differences count against it even when the song already sounds right.<small class="tech">Pearson correlation of the samples with the final take\'s.</small>', (m) => m.correlation_final, (v) => v],
-    ['Latent match', '<b>Latent match</b> compares the model\'s own internal sketch of the song (its ' + EX.g('latent', 'latent') + ') with its final sketch. It climbs early: the model settles what the song is well before the sound itself comes clean.<small class="tech">Cosine similarity of the latent with the final latent.</small>', (m) => m.cosine_final, (v) => v],
-    ['Band agreement', '<b>Band agreement</b> asks, for each pitch band, whether it gets louder and quieter at the same moments as the finished song. It shows the song\'s shape, its rhythm and sections, arriving before the detail. The map below shows it band by band.', null, (v) => v],
-    ['Brightness Hz', '<b>Brightness</b> is the average pitch of all the sound energy, in Hz. Static is bright and hissy, so it starts high and drifts toward the song\'s own brightness as the noise clears.<small class="tech">Mean over bands of the correlation of each band\'s energy envelope with the final take\'s.</small><small class="tech">Spectral centroid, Hz.</small>', (m) => m.spectral_centroid_hz, (v) => v / 5000],
+    ['Waveform match', '<b>Waveform match</b> compares the actual sound wave at this step with the finished song\'s, moment by moment. 1 means the shapes line up perfectly, which is not quite the same as identical; 0 means no straight-line relationship. It stays low until late, because tiny timing differences count against it even when the song already sounds right.<small class="tech">Pearson correlation of the samples with the final take\'s.</small>', (m) => m.correlation_final, (v) => v],
+    ['Latent match', '<b>Latent match</b> compares the model\'s own internal sketch of the song (its ' + EX.g('latent', 'latent') + ') with its final sketch. It climbs early: the sketch settles well before the sound itself comes clean.<small class="tech">Cosine similarity of the latent with the final latent.</small>', (m) => m.cosine_final, (v) => v],
+    ['Band agreement', '<b>Band agreement</b> asks, for each frequency band, whether it gets louder and quieter at the same moments as the finished song, averaged over the bands. The map below shows it band by band.<small class="tech">Mean over bands of the envelope correlation with step 32\'s, negatives counted as 0.</small>', null, (v) => v],
+    ['Brightness Hz', '<b>Brightness</b> is the average frequency of the sound, weighted by how strong each frequency is. Noise is bright and hissy, so it starts high and drifts toward the song\'s own brightness as the noise clears.<small class="tech">Spectral centroid of the magnitude spectrum, Hz.</small>', (m) => m.spectral_centroid_hz, (v) => v / 5000],
   ];
   const metricEls = METRICS.map(([name, sub]) => {
     const d = document.createElement('div'); d.className = 'metric';
@@ -777,7 +781,7 @@
     const other = setName === 'state' ? 'predicted' : 'state';
     $('stepbig').innerHTML = `step ${s}`;
     $('ringnum').textContent = s;
-    const blurb = s === 0 ? 'pure static: the start' : s === S ? 'the finished song' : `${Math.round(s / S * 100)}% of the way from static to song`;
+    const blurb = ui.mode === 2 || s === S ? 'the finished song, step 32' : s === 0 ? 'the starting noise' : `${Math.round(s / S * 100)}% of the steps done`;
     $('stepsub').innerHTML = `${blurb}<br>showing <b style="color:#ffc2e3">${MODES[ui.mode]}</b>${m.t != null ? ` · ${EX.g('t', 't')} ${m.t.toFixed(2)}` : ''}`;
     $('arc').setAttribute('d', s ? arcPath(s) : '');
     const [kx, ky] = pt(ang(s), R); $('knob').setAttribute('cx', kx); $('knob').setAttribute('cy', ky);
@@ -915,13 +919,14 @@
     const p = pick(e);
     if (!p || e.buttons) { tip.hide(); uniforms.uHoverZ.value = -999; hoverBand = -1; return; }
     const s = Math.round(ui.target), at = (arr, k) => arr[k * B * C + p.b * C + p.c] / 255;
+    const view = ui.mode === 1 ? 'predicted' : 'state', ks = ui.mode === 2 ? S : s;
     const [lo, hi] = D.range_log10, db = (v) => ((lo + v * (hi - lo)) * 10 - hi * 10).toFixed(0);
     uniforms.uHoverZ.value = bandZ[p.b];
     const band = PITCH[bandOf(D.band_lo_hz[p.b])]; hoverBand = bandOf(D.band_lo_hz[p.b]);
     tip.show(`<b>${fmt(p.sec)}</b> into the song · <b>${band[0]}</b> <span class="m">(${Math.round(D.band_lo_hz[p.b])}–${Math.round(D.band_hi_hz[p.b])} Hz)</span><br>
-      <span class="m">loudness here at step ${s}, in dB below the loudest point:</span><br>
+      <span class="m">level here at step ${s}, in dB below the loudest spots (99.9th percentile):</span><br>
       now ${db(at(state, s))} · predicted ${db(at(pred, s))} · finished ${db(at(state, S))}<br>
-      <span class="m">how closely it already moves like the finished song (1 = exactly):</span> ${num(settleS[s * B + p.b] / 255, 2)}<br>
+      <span class="m">how closely this band's level rises and falls like the finished song's, ${view} view (1 = perfectly):</span> ${num((view === 'state' ? settleS : settleP)[ks * B + p.b] / 255, 2)}<br>
       <span class="m">click to play from here</span>`, e.clientX, e.clientY);
   });
   st.canvas.addEventListener('pointerleave', () => { tip.hide(); uniforms.uHoverZ.value = -999; hoverBand = -1; });
