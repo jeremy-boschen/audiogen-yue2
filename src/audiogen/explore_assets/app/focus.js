@@ -300,7 +300,7 @@
     el.addEventListener('pointerleave', () => { hoverBand = -1; });
     return el;
   });
-  L.add(EX.g('settling', 'settling wall'), new T.Vector3(wallX, 15, DEPTH / 2 + 2), 'tick big');
+  L.add(EX.g('settling', 'settling wall'), new T.Vector3(wallX, 16, -DEPTH / 2 - 3), 'tick big');   // at the back, clear of the band labels
   (D.sections || []).forEach((s) => {
     if (s.start < D.seconds) L.add(s.label, new T.Vector3((xOfSec(s.start) + xOfSec(Math.min(s.end, D.seconds))) / 2, 0.1, ARR_Z), 'tick arr');
   });
