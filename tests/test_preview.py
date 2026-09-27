@@ -70,6 +70,15 @@ def test_a_preview_voices_the_tokens_so_far_then_hands_the_model_back(plain):
     assert pipe.events[-2:] == [("synthesize", [5, 6, 7, 8]), ("decode", 4)]   # the take itself
 
 
+def test_a_request_before_the_minimum_waits_for_it(plain):
+    song, step = plain
+    pipe, asked = Pipe(), []
+    preview = render.Preview(lambda: asked.append(1) or True, lambda audio, seconds: None, every=1, min_tokens=3)
+    render.render_step(pipe, song, step, preview=preview)
+    first = next(e for e in pipe.events if e[0] == "synthesize")
+    assert first == ("synthesize", [5, 6, 7])          # not polled at tokens 1 and 2
+
+
 def test_no_preview_is_taken_unless_asked(plain):
     song, step = plain
     pipe = Pipe()

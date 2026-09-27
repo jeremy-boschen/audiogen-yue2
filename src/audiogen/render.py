@@ -234,15 +234,16 @@ def request_for(song: Song, step: Step):
 class Preview:
     """Asks for "listen to the song so far" while the semantic stage is writing.
 
-    ``wanted()`` is polled every ``every`` tokens; when it returns True the tokens
+    ``wanted()`` is polled every ``every`` tokens once ``min_tokens`` have been
+    written (fewer gives the sound stage too little to go on); when it returns True the tokens
     written so far are voiced and decoded, ``deliver(audio, seconds)`` receives the
     result, and the stage carries on from where it paused. The take is unchanged:
     sampling draws from its own generator and KV cache, and the model is handed back
     to the AR stage exactly as the NAR stage found it (tests/test_preview.py).
     """
 
-    def __init__(self, wanted, deliver, every: int = 25):
-        self.wanted, self.deliver, self.every = wanted, deliver, every
+    def __init__(self, wanted, deliver, every: int = 25, min_tokens: int = 0):
+        self.wanted, self.deliver, self.every, self.min_tokens = wanted, deliver, every, min_tokens
 
 
 def preview_so_far(pipe, plan, tokens: list[int], step: Step, known_latents=None) -> np.ndarray:
@@ -309,7 +310,7 @@ def render_step(pipe, song: Song, step: Step, previous: Take | None = None, *,
             value = int(token) - CODEC_OFFSET
             if 0 <= value < CODEC_SIZE:
                 written.append(value)
-                if len(written) % preview.every == 0 and preview.wanted():
+                if len(written) >= preview.min_tokens and len(written) % preview.every == 0 and preview.wanted():
                     preview.deliver(preview_so_far(pipe, plan, written, step, known_latents), len(written) / 25)
     semantic = pipe.generate_semantic(plan, sampling=sampling, carry=carry_tokens, on_token=semantic_observer)
     stages["semantic"] = {"hash": hashes.hash_tokens(semantic.tokens),
