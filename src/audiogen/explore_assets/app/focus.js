@@ -20,16 +20,19 @@
     <dl>
       <dt>▶ and the step slider</dt><dd>Press play, then drag the slider (or use ← →) to move between steps while it plays.
         The sound switches in place.</dd>
-      <dt>Resolve</dt><dd>Plays the whole process for you: step 0 to 32, with the sound following.</dd>
+      <dt>Resolve</dt><dd>Plays the whole process for you: step 0 to 32, with the sound following. By default it takes one
+        pass of the song; drag <b>Resolve pace</b> to slow it down or speed it up while it plays.</dd>
+      <dt>I hear…</dt><dd>While it resolves, tap a button over the landscape the moment you hear a voice, the words or the
+        chords. Your marks stay in this browser.</dd>
       <dt>State · Predicted final · Finished</dt><dd><b>State</b> is the song exactly as it is at this step: still partly
         noise until the last few steps. <b>Predicted final</b> is where the model thinks it is heading from here, often
         recognizable surprisingly early. <b>Finished</b> is the end result.</dd>
       <dt>Ghost overlay</dt><dd>A see-through copy of the other view floating above: in State, where it is heading; in
         Predicted final, where it actually is. The gap is how far it still has to go.</dd>
       <dt>Marks on the dial</dt><dd>Where something first became hearable: the beat, a voice, the words. <b>Gold dots</b>
-        were marked by someone listening. <b>Blue rings</b> are machines: a speech recognizer, a voice detector and a music
+        are yours: press <kbd>M</kbd> while it plays and tap what you can hear. <b>Blue rings</b> are machines: a speech recognizer, a voice detector and a music
         transcriber, each comparing a step with its own reading of the finished song. Machines and ears often disagree;
-        both are shown. Click a row below the dial to jump there.</dd>
+        both are shown, side by side, in the list below the dial.</dd>
       <dt>Settling color</dt><dd>Color means that part of the sound already matches the finished song; gray and glittering means it
         is still forming. The low end and the beat tend to lock in first, fine detail last.</dd>
     </dl>
@@ -234,7 +237,10 @@
   const secNote = L.add('sections: score time', new T.Vector3(-W / 2 - 14, 0, DEPTH / 2 + 5), 'tick');
 
   // --- state ------------------------------------------------------------------------
+  // Resolve's pace, seconds per step while the song plays. By default the 32 steps take one pass of the song.
+  const PACE_DEFAULT = Math.round(D.seconds / D.steps * 10) / 10;
   const ui = {
+    pace: PACE_DEFAULT,
     target: 0, shown: 0, mode: 0, ghost: true, settle: true, playing: false,
     mixT: 0, finT: 0, animating: false,
   };
@@ -437,6 +443,15 @@
   // Only a person's ears fill these in (the run's analysis/annotations.json); nothing is measured.
   // Each gets a pulsing dot inside the dial and a row below it. Served locally, M marks a step.
   const HEARD = D.listening || { fields: [], state: {}, predicted: {} };
+  // Served locally, marks go to the run on disk. Anywhere else, the published
+  // demo included, a visitor's marks stay in their own browser and nowhere else.
+  const LOCAL = Boolean(D.annotate) && location.protocol !== 'file:';
+  const STORE = `microscope-marks-${D.run}`;
+  if (!LOCAL) {
+    let mine = {};
+    try { mine = JSON.parse(localStorage.getItem(STORE) || '{}'); } catch (e) { mine = {}; }
+    HEARD.state = mine.state || {}; HEARD.predicted = mine.predicted || {};
+  }
   const LABEL = Object.fromEntries(HEARD.fields);
   const viewKey = () => (ui.mode === 1 ? 'predicted' : 'state');
   function firstHeard(view) {
@@ -467,18 +482,22 @@
       const [x, y] = pt(ang(+s), R - 22);
       return `<g class="machinemark${reached(s)}"><circle cx="${x}" cy="${y}" r="3"/><title>Step ${s}, a machine: ${fs.map((f) => LABEL[f] || f).join(', ')}</title></g>`;
     }).join('');
-    const rows = [
-      ...Object.entries(byStep).map(([s, names]) => ({ s: +s, who: 'listener', text: names.join(', '), tip: 'Marked by someone listening' })),
-      ...Object.entries(byMachine).map(([s, fs]) => ({ s: +s, who: 'machine', text: fs.map((f) => LABEL[f] || f).join(', '),
-        tip: fs.map((f) => `${LABEL[f] || f}: ${MACHINE.says[f]}`).join('\n') })),
-    ].sort((a, b) => a.s - b.s || (a.who === 'listener' ? -1 : 1));
-    $('heard').innerHTML = rows.length
-      ? `<div class="dim">First heard</div>` + rows.map((r) =>
-          `<button class="heardrow ${r.who}${reached(r.s)}" data-step="${r.s}" title="${r.tip.replace(/"/g, '&quot;')}"><b>${r.s}</b><span>${r.text}</span><span class="who ${r.who}">${r.who}</span></button>`).join('')
-      : canMark ? '<div class="dim">Nothing marked yet. Play, and press M at the step where you first hear something.</div>' : '';
-    $('heard').querySelectorAll('.heardrow').forEach((b) => (b.onclick = () => setStep(+b.dataset.step)));
+    const mine = {}, theirs = (MACHINE && MACHINE[view]) || {};
+    Object.entries(byStep).forEach(([st, names]) => names.forEach((n) => (mine[n] = +st)));
+    const fields = HEARD.fields.filter(([f, label]) => mine[label] !== undefined || theirs[f] !== undefined);
+    const cell = (who, st, tip) => st === undefined ? `<span class="who ${who} none">${who} –</span>`
+      : `<span class="who ${who}${reached(st)}" title="${tip}">${who} ${st}</span>`;   // a label, not a control: a click used to jump the step
+    const gap = (a, b) => a === undefined || b === undefined ? '' : a < b ? `${b - a} steps sooner` : a > b ? `${a - b} steps later` : 'same step';
+    const empty = canMark ? `<div class="dim">${MACHINE ? 'Blue rings are where machines first picked something out. Can you hear it sooner? ' : ''}Press Resolve and tap the "I hear" buttons over the landscape, or mark more here.</div>` : '';
+    $('heard').innerHTML = fields.length
+      ? `<div class="dim">First heard</div>` + fields.sort(([fa, la], [fb, lb]) =>
+          Math.min(mine[la] ?? 99, theirs[fa] ?? 99) - Math.min(mine[lb] ?? 99, theirs[fb] ?? 99)).map(([f, label]) =>
+          `<div class="heardrow"><span>${label}</span>${cell('you', mine[label], 'Where you first heard it')}${cell('machine', theirs[f],
+            MACHINE && MACHINE.says[f] ? MACHINE.says[f].replace(/"/g, '&quot;') : '')}<small>${gap(mine[label], theirs[f])}</small></div>`).join('')
+        + (Object.keys(mine).length ? '' : empty)
+      : empty;
   }
-  const canMark = Boolean(D.annotate) && location.protocol !== 'file:';
+  const canMark = LOCAL || (() => { try { return !!window.localStorage; } catch (e) { return false; } })();
   let marking = false;
   function drawMarker() {
     const box = $('marker');
@@ -486,16 +505,63 @@
     if (!marking) return;
     if (ui.mode === 2) { box.innerHTML = '<div class="dim">Switch to State or Predicted final to mark a step.</div>'; return; }
     const s = Math.round(ui.target), view = viewKey(), now = (HEARD[view] || {})[s] || {};
-    box.innerHTML = `<div class="dim">Step ${s}, ${view === 'state' ? 'State' : 'Predicted final'}: tap what you can hear.</div>`
+    box.innerHTML = `<div class="dim">Step ${s}, ${view === 'state' ? 'State' : 'Predicted final'}: tap what you can hear.${LOCAL ? '' : ' Saved in this browser only.'}</div>`
+      + (LOCAL || !(Object.keys(HEARD.state).length || Object.keys(HEARD.predicted).length) ? '' : '<button class="linkbtn" id="clearmarks">Clear my marks</button>')
       + HEARD.fields.map(([f, label]) => `<button class="markchip${now[f] === true ? ' on' : ''}" data-f="${f}">${label}</button>`).join('');
+    const clear = box.querySelector('#clearmarks');
+    if (clear) clear.onclick = () => { HEARD.state = {}; HEARD.predicted = {}; localStorage.removeItem(STORE); drawMarks(); drawMarker(); drawGame(); };
     box.querySelectorAll('.markchip').forEach((b) => (b.onclick = () => mark(view, s, b.dataset.f, now[b.dataset.f] === true ? null : true)));
   }
   function mark(view, step, field, value) {
+    if (!LOCAL) {
+      const steps = HEARD[view];
+      steps[step] = { ...(steps[step] || {}), [field]: value };
+      if (value === null) delete steps[step][field];
+      if (!Object.keys(steps[step]).length) delete steps[step];
+      localStorage.setItem(STORE, JSON.stringify({ state: HEARD.state, predicted: HEARD.predicted }));
+      drawMarks(); drawMarker(); drawGame(); return;
+    }
     fetch('/api/annotate', { method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ run: D.annotate, view, step, field, value }) })
       .then((r) => r.json().then((j) => { if (!r.ok) throw new Error(j.error || r.status); return j; }))
-      .then((j) => { HEARD.state = j.state; HEARD.predicted = j.predicted; drawMarks(); drawMarker(); })
+      .then((j) => { HEARD.state = j.state; HEARD.predicted = j.predicted; drawMarks(); drawMarker(); drawGame(); })
       .catch((e) => $('marker').insertAdjacentHTML('beforeend', `<div class="dim">Not saved: ${e.message}</div>`));
+  }
+  // The listening game: big "I hear..." buttons over the landscape for the things the machines mark, so a
+  // visitor races them without finding a key. A tap marks the step on screen as the first time they heard it.
+  const GAME = [['vocal_present', 'a voice'], ['words_partially_intelligible', 'some words'],
+                ['words_intelligible', 'all the words'], ['harmony_recognizable', 'the chords']];
+  function firstMine(view, field) {
+    const steps = Object.keys(HEARD[view] || {}).map(Number).sort((a, b) => a - b);
+    return steps.find((st) => HEARD[view][st][field] === true);
+  }
+  function claim(view, field, step) {                 // this step becomes the first; earlier and later taps of it go
+    Object.keys(HEARD[view] || {}).map(Number).forEach((st) => {
+      if (st !== step && HEARD[view][st][field] === true) mark(view, st, field, null);
+    });
+    mark(view, step, field, true);
+  }
+  function drawGame() {
+    const box = $('game');
+    box.hidden = !canMark || ui.mode === 2;
+    if (box.hidden) return;
+    const view = viewKey(), s = Math.round(ui.target), theirs = (MACHINE && MACHINE[view]) || {};
+    const done = GAME.filter(([f]) => firstMine(view, f) !== undefined).length;
+    $('gamecue').innerHTML = done === GAME.length
+      ? 'All four marked. Compare with the machines in the panel, or switch view and try again.'
+      : ui.playing || ui.animating
+        ? 'Tap the moment you hear it'
+        : `Press <b>Resolve</b> to hear the song come out of the noise, and tap the moment you hear each of these.${MACHINE ? ' Can you beat the machines?' : ''}`;
+    $('gamepills').innerHTML = GAME.map(([f, what]) => {
+      const mine = firstMine(view, f), them = theirs[f];
+      if (mine === undefined) return `<button class="gamepill" data-f="${f}">I hear ${what}</button>`;
+      const vs = them === undefined ? '' : mine < them ? ` · ${them - mine} before the machine` : mine > them ? ` · ${mine - them} after the machine` : ' · same as the machine';
+      return `<button class="gamepill got" data-f="${f}" title="Tap to move it to step ${s}">${what} <b>step ${mine}</b>${vs}</button>`;
+    }).join('');
+    $('gamepills').querySelectorAll('.gamepill').forEach((b) => (b.onclick = () => {
+      claim(view, b.dataset.f, Math.round(ui.target));
+      b.classList.add('pop');
+    }));
   }
   $('markbtn').hidden = !canMark;
   $('markbtn').onclick = () => { marking = !marking; $('markbtn').classList.toggle('on', marking); drawMarker(); };
@@ -524,7 +590,7 @@
   const bandRows = [...$('bands').querySelectorAll('.b')];
 
   function renderPanel() {
-    drawMarks(); drawMarker();
+    drawMarks(); drawMarker(); drawGame();
     const s = Math.round(ui.target);
     const m = D.metrics[s];
     const setName = ui.mode === 1 ? 'predicted' : 'state';
@@ -618,10 +684,22 @@
     renderPanel();
   }
   function setMode(m) { ui.mode = m; renderPanel(); }
-  function setPlayIcon() { $('play').textContent = ui.playing ? '❚❚' : '▶'; }
+  function setPlayIcon() { $('play').textContent = ui.playing ? '❚❚' : '▶'; if (typeof drawGame === 'function') drawGame(); }
   function togglePlay() { if (ui.playing) audio.pause(); else audio.start(); setPlayIcon(); }
   $('play').onclick = togglePlay;
-  $('resolve').onclick = () => { ui.animating = !ui.animating; if (ui.animating && ui.target >= S) setStep(0, true); ui.animClock = 0; $('resolve').classList.toggle('on', ui.animating); };
+  function setPace(v) {
+    ui.pace = Math.min(6, Math.max(0.5, Math.round(v * 10) / 10));
+    $('pacerange').value = -ui.pace;                  // the slider is speed: right is faster
+    $('pacelabel').textContent = `1 step every ${ui.pace.toFixed(1)} s · the whole solve in ${fmtPace(ui.pace * D.steps)}`;
+  }
+  const fmtPace = (t) => (t >= 60 ? `${Math.floor(t / 60)}:${String(Math.round(t % 60)).padStart(2, '0')}` : `${Math.round(t)} s`);
+  $('pacerange').oninput = (e) => setPace(-e.target.value);
+  setPace(ui.pace);
+  $('resolve').onclick = () => {
+    ui.animating = !ui.animating; if (ui.animating && ui.target >= S) setStep(0, true); ui.animClock = 0;
+    if (ui.animating && !ui.playing) { audio.start(); setPlayIcon(); }   // the process is something to hear, not only watch
+    $('resolve').classList.toggle('on', ui.animating); drawGame();
+  };
   $('slider').oninput = (e) => setStep(+e.target.value);
   document.querySelectorAll('#modes button').forEach((b) => (b.onclick = () => setMode(+b.dataset.mode)));
   $('ghost').onclick = () => { ui.ghost = !ui.ghost; renderPanel(); };
@@ -636,6 +714,7 @@
     else if (k === 'm' && canMark) $('markbtn').click();
     else if (k === 'c') $('settlebtn').click();
     else if (k === 'a') $('resolve').click();
+    else if (k === '[' || k === ']') setPace(ui.pace + (k === '[' ? 0.5 : -0.5));
     else if (k === ',') audio.seek(audio.time() - 5);
     else if (k === '.') audio.seek(audio.time() + 5);
     else if (k === 'r') { camera.position.copy(home.pos); controls.target.copy(home.target); }
@@ -681,8 +760,8 @@
   st.onFrame((dt, now) => {
     if (ui.animating) {
       ui.animClock = (ui.animClock || 0) + dt;
-      const rate = ui.playing ? 0.9 : 2.6;             // steps per second
-      if (ui.animClock > 1 / rate) { ui.animClock = 0; if (ui.target >= S) { ui.animating = false; $('resolve').classList.remove('on'); } else setStep(ui.target + 1, true); }
+      const rate = ui.playing ? 1 / ui.pace : 2.6;     // steps per second: the listener's pace with sound, brisk without
+      if (ui.animClock > 1 / rate) { ui.animClock = 0; if (ui.target >= S) { ui.animating = false; $('resolve').classList.remove('on'); drawGame(); } else setStep(ui.target + 1, true); }
     }
     const k = reduced ? 1 : 1 - Math.exp(-dt * 7);
     ui.shown += (ui.target - ui.shown) * k; if (Math.abs(ui.target - ui.shown) < 1e-3) ui.shown = ui.target;

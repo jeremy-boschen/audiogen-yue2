@@ -144,7 +144,8 @@ def cmd_publish(args):
     cache.mkdir(parents=True, exist_ok=True)
     focus, stack = explore.focus_data(run, out, cache), explore.stack_data(run, out, cache)
     label = f"{args.title}, take {args.take}" if args.take else args.title
-    focus["annotate"] = None                          # marks are read-only on the web
+    focus["annotate"] = None                          # nothing to write to on the web: a visitor's marks stay in their browser
+    focus["listening"] = {**focus["listening"], "state": {}, "predicted": {}}   # visitors start from the machines' marks
     focus["run"] = stack["run"] = label
     done: dict = {}
     focus = _publish_audio(focus, out, args.media_base, done)

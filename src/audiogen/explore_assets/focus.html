@@ -32,8 +32,11 @@
     </div>
   </div>
   <input type="range" id="slider" min="0" max="32" step="1" value="0" style="margin-top:8px">
+  <div class="pace" title="How fast Resolve moves through the steps while the song plays: right is faster ([ slower, ] faster)">
+    <span>Resolve pace</span><input type="range" id="pacerange" min="-6" max="-0.5" step="0.1" aria-label="Resolve speed"><small id="pacelabel"></small>
+  </div>
   <div class="heard" id="heard" aria-label="Where a listener first heard each thing"></div>
-  <button class="btn" id="markbtn" hidden title="Mark what you can hear at this step; saved to the run (M)">Mark what I hear <kbd>M</kbd></button>
+  <button class="btn" id="markbtn" hidden title="Mark what you can hear at this step (M)">Mark what I hear <kbd>M</kbd></button>
   <div class="marker" id="marker" hidden></div>
 
   <h3>What to show and hear <small>switches without restarting</small></h3>
@@ -70,8 +73,12 @@
   <div class="scrub" id="scrub"><canvas id="scrubcanvas"></canvas></div>
 </div>
 
+<div class="game" id="game" hidden>
+  <div class="gamecue" id="gamecue"></div>
+  <div class="gamepills" id="gamepills"></div>
+</div>
 <div class="keys"><kbd>space</kbd>play · <kbd>←</kbd><kbd>→</kbd>step · <kbd>1</kbd><kbd>2</kbd><kbd>3</kbd>view · <kbd>G</kbd>ghost ·
-  <kbd>A</kbd>resolve · <kbd>,</kbd><kbd>.</kbd>seek 5 s · <kbd>R</kbd>reset camera · drag to orbit, scroll to zoom, click the land to seek</div>
+  <kbd>A</kbd>resolve · <kbd>[</kbd><kbd>]</kbd>pace · <kbd>,</kbd><kbd>.</kbd>seek 5 s · <kbd>R</kbd>reset camera · drag to orbit, scroll to zoom, click the land to seek</div>
 
 <script src="vendor/three/three.bundle.js"></script>
 <script src="data/focus.js"></script>
