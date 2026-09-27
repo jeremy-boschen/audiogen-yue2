@@ -187,7 +187,7 @@ Run all commands from `~/dev/projects/audiogen-yue2`.
    switched off, so a visitor's marks stay in their browser. The page is labeled with `--title` and
    `--take`, which are required for any run other than `DEFAULT_RUN` (labeled "Slow Down, take 2").
 4. It converts every audio file the data refers to into AAC 160k `.m4a` and rewrites each path to
-   `<media-base>/<name>`. The name hashes the source bytes, the encoder settings (`AAC_ARGS`) and the
+   `<media-base>/<name>`. Encoder and bitrate come from `--aac-encoder` and `--aac-bitrate`. The name hashes the source bytes, the encoder settings (`aac_args`) and the
    ffmpeg version (`media/<sha256[:16]>.m4a`), so any change that could change the output gives a new
    name, and the files can be cached forever.
 5. It rewrites the index for the web (`_swap`) with an intro, an About panel and two columns.

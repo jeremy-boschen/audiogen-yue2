@@ -100,7 +100,9 @@ def _swap(path: pathlib.Path, old: str, new: str) -> None:
     path.write_text(text.replace(old, new))
 
 
-AAC_ARGS = ["-c:a", "aac", "-b:a", "160k", "-map_metadata", "-1", "-fflags", "+bitexact", "-movflags", "+faststart"]
+def aac_args(encoder: str, bitrate: str) -> list[str]:
+    """ffmpeg's own AAC encoder ("aac") or Apple's AudioToolbox one ("aac_at", macOS only)."""
+    return ["-c:a", encoder, "-b:a", bitrate, "-map_metadata", "-1", "-fflags", "+bitexact", "-movflags", "+faststart"]
 
 
 @functools.cache
@@ -109,26 +111,26 @@ def _ffmpeg_version() -> bytes:
     return subprocess.run(["ffmpeg", "-version"], capture_output=True, check=True).stdout.split(b"\n")[0]
 
 
-def _publish_audio(value, out: pathlib.Path, base: str, done: dict):
+def _publish_audio(value, out: pathlib.Path, base: str, done: dict, enc: list[str]):
     """Replace every audio path in a data tree with its AAC copy under out/media/."""
     import hashlib
     import subprocess
     if isinstance(value, dict):
-        return {k: _publish_audio(v, out, base, done) for k, v in value.items()}
+        return {k: _publish_audio(v, out, base, done, enc) for k, v in value.items()}
     if isinstance(value, list):
-        return [_publish_audio(v, out, base, done) for v in value]
+        return [_publish_audio(v, out, base, done, enc) for v in value]
     if not (isinstance(value, str) and value.endswith(AUDIO_SUFFIXES)):
         return value
     if value not in done:
         source = (out / value).resolve()
         # Named by what makes the bytes: the source, the encoder settings and the encoder's version. The URLs are
         # cached forever, so a change to any of them must give a new name.
-        digest = hashlib.sha256(source.read_bytes() + " ".join(AAC_ARGS).encode() + _ffmpeg_version()).hexdigest()[:16]
+        digest = hashlib.sha256(source.read_bytes() + " ".join(enc).encode() + _ffmpeg_version()).hexdigest()[:16]
         name = f"{digest}.m4a"
         target = out / "media" / name
         if not target.exists():
             target.parent.mkdir(exist_ok=True)
-            subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(source), *AAC_ARGS, str(target)], check=True)
+            subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(source), *enc, str(target)], check=True)
         done[value] = name
     return f"{base}/{done[value]}"
 
@@ -162,8 +164,9 @@ def cmd_publish(args):
     focus["listening"] = {**focus["listening"], "state": {}, "predicted": {}}   # visitors start from the machines' marks
     focus["run"] = stack["run"] = label
     done: dict = {}
-    focus = _publish_audio(focus, out, args.media_base, done)
-    stack = _publish_audio(stack, out, args.media_base, done)
+    enc = aac_args(args.aac_encoder, args.aac_bitrate)
+    focus = _publish_audio(focus, out, args.media_base, done, enc)
+    stack = _publish_audio(stack, out, args.media_base, done, enc)
     # The page downloads all of it before playing; the total lets its progress bar count bytes.
     focus_files = {u.rsplit("/", 1)[-1] for u in [focus["audio"]["finished"], *focus["audio"]["state"], *focus["audio"]["predicted"]]}
     focus["audio_bytes"] = sum((out / "media" / n).stat().st_size for n in focus_files)
@@ -275,6 +278,8 @@ def main():
     publish.add_argument("run", nargs="?", default=str(DEFAULT_RUN))
     publish.add_argument("--title", help="the song's name; required unless publishing the default run")
     publish.add_argument("--take", type=int)
+    publish.add_argument("--aac-encoder", default="aac", choices=["aac", "aac_at"])
+    publish.add_argument("--aac-bitrate", default="160k")
     publish.add_argument("--media-base", default="media",
                          help="where the audio will be served from: 'media' (beside the pages) or a URL")
     publish.add_argument("--home", default="https://www.newty.coffee/")
