@@ -368,6 +368,8 @@ def focus_data(run: Path, out: Path, cache: Path | None = None) -> dict:
         "audio_note": "peak-normalized listening copies (-1 dBFS); 'finished' is step 32, which is the take",
         "listening": listening_marks(run),
         "machine": machine_marks(run),
+        # When each part first comes in, in song time (bin/find_entries.py): the order the "I hear" cues appear.
+        "entries": (read_json(Path(run) / "analysis/entries.json") or {}).get("entries"),
         # Where the local server writes marks (bin/explore.py serve); publish clears it.
         "annotate": rel(run, out) if (run / "analysis/annotations.json").exists() else None,
     }

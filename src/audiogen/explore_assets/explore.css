@@ -29,14 +29,8 @@ kbd { font: 600 10.5px -apple-system, sans-serif; border: 1px solid var(--line);
 .labels { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
 .labels .tick { position: absolute; transform: translate(-50%, -50%); font: 500 10.5px -apple-system, sans-serif;
                 color: rgba(200, 212, 235, .72); white-space: nowrap; text-shadow: 0 0 6px #0a0f1c, 0 0 2px #0a0f1c; }
-.labels .tick.hz { font: 600 10.5px -apple-system, sans-serif; color: #e6ecfa; padding: 1px 6px; border-radius: 5px;
-                   background: rgba(10, 15, 28, .78); border: 1px solid rgba(143, 216, 255, .3); text-shadow: none; }
-/* a listener's pin on the time line: a small head with the step, its point on the moment they heard it */
-.labels .pin { position: absolute; transform: translate(-50%, -100%); pointer-events: auto; cursor: default;
-               display: flex; flex-direction: column; align-items: center; filter: drop-shadow(0 2px 6px rgba(0, 0, 0, .6)); }
-.labels .pin::after { content: ""; width: 2px; height: 14px; background: var(--c); }
-.labels .pin .pinhead { min-width: 20px; height: 20px; padding: 0 5px; border-radius: 10px; background: var(--c); color: #0a0f1c;
-                        font: 700 11px/20px -apple-system, sans-serif; text-align: center; box-shadow: 0 0 12px var(--c); }
+.labels .tick.hz { font: 600 10.5px -apple-system, sans-serif; color: #f2f5fc; padding: 1px 6px; border-radius: 5px;
+                   background: rgba(60, 78, 120, .45); border: 1px solid rgba(190, 215, 255, .28); }
 .labels .tick.big { font: 600 11px -apple-system, sans-serif; letter-spacing: .14em; text-transform: uppercase; color: #dfe6f5; }
 .labels .tick.sec { font: 600 11px -apple-system, sans-serif; letter-spacing: .08em; color: #fff; padding: 2px 7px;
                     border-radius: 6px; background: rgba(13, 20, 36, .7); border: 1px solid rgba(155, 107, 255, .45); }
@@ -266,3 +260,39 @@ input[type=range] { width: 100%; accent-color: var(--pink); }
 .panel.compact .bars .b { margin: 2px 0; }
 #settlemap { width: 100%; height: 120px; display: block; cursor: pointer; border-radius: 8px; margin-top: 8px; }
 .panel.compact .honest { margin-top: 12px; padding: 7px 10px; font-size: 11px; }
+
+/* with a side panel, the help card centers on the open space beside it */
+@media (min-width: 901px) { body:has(.panel.right) .helpcard { left: calc((100vw - 392px) / 2); width: min(1000px, calc(100vw - 424px)); } }
+
+/* focus panel: a column, with the hover help taking the room at its foot */
+.panel.compact { display: flex; flex-direction: column; }
+.panel.compact > * { flex-shrink: 0; }
+.panel.compact #markbtn { align-self: flex-start; }
+.hoverhelp { margin-top: auto; padding: 12px 2px 0; min-height: 96px; border-top: 1px solid var(--line-soft);
+             color: var(--faint); font-size: 12px; line-height: 1.5; }
+.hoverhelp.on { color: #c9d2e3; }
+.hoverhelp b { color: var(--text); font-weight: 600; }
+.hoverhelp kbd { font-size: 9.5px; padding: 0 5px; }
+.panel.compact { padding-bottom: 12px; }
+
+/* pins: an anchor on the time line, a line down into the open space under the land, a small tag at its foot */
+.pins { position: fixed; inset: 0; pointer-events: none; z-index: 4; }
+.pin { position: absolute; left: 0; top: 0; width: 0; height: 0; }
+.pin[hidden] { display: none; }
+.pin .anchor { position: absolute; left: -5px; top: -5px; width: 10px; height: 10px; border-radius: 50%; background: var(--c);
+               box-shadow: 0 0 10px var(--c), 0 0 0 3px rgba(10, 15, 28, .6); }
+.pin .stem { position: absolute; left: -0.5px; top: 5px; width: 1px; height: calc(var(--len) - 5px);
+             background: linear-gradient(var(--c), color-mix(in srgb, var(--c) 25%, transparent)); }
+.pin .tag { position: absolute; left: -4px; top: var(--len); display: flex; align-items: center; gap: 5px; white-space: nowrap;
+            pointer-events: auto; font-size: 10.5px; color: var(--muted); }
+.pin .tag i { width: 7px; height: 7px; border-radius: 50%; border: 1.5px solid var(--c); }
+.pin .tag em { font-style: normal; }
+.pin.landing .anchor { animation: pinland .6s ease-out; }
+@keyframes pinland { 0% { transform: scale(0); } 70% { transform: scale(1.6); } 100% { transform: scale(1); } }
+.fly { position: fixed; z-index: 40; width: 14px; height: 14px; margin: -7px 0 0 -7px; border-radius: 50%; background: var(--c);
+       box-shadow: 0 0 18px var(--c); pointer-events: none; transition: transform .6s cubic-bezier(.5, 0, .3, 1), opacity .6s; }
+.gamepill.enter { animation: gamein .5s ease-out, gamebreathe 2.6s ease-in-out .5s infinite; }
+@keyframes gamein { 0% { opacity: 0; transform: translateY(10px) scale(.9); } 100% { opacity: 1; transform: none; } }
+.cuemark circle { fill: var(--c); opacity: .45; pointer-events: none; }
+.cuemark.reached circle { opacity: 1; filter: drop-shadow(0 0 3px var(--c)); }
+@media (prefers-reduced-motion: reduce) { .fly { transition: none; } .gamepill.enter, .pin.landing .anchor { animation: none; } }

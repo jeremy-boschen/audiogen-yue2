@@ -12,34 +12,33 @@
 <div class="hero">
   <div class="kicker">Generation microscope · from noise to song</div>
   <h1>Coming into focus</h1>
+  <p>The model builds the sound of the whole song at once, from noise, in 32 steps. Here it is at every step:
+     time runs left to right, pitch front to back, loudness up. Press <em>Resolve</em> and hear it come through.</p>
 </div>
 
 <aside class="panel right compact" id="panel">
   <div class="ringwrap">
-    <svg class="ring" id="ring" viewBox="0 0 150 150"></svg>
+    <svg class="ring" id="ring" viewBox="0 0 150 150" data-help="<b>The steps</b>, 0 to 32, from noise to song. Drag the ring or press <kbd>←</kbd> <kbd>→</kbd>. A colored dot marks each step where you heard something come in."></svg>
     <div class="stepinfo">
       <div class="big" id="stepbig">0</div>
       <div class="sub" id="stepsub"></div>
       <div class="row" style="margin-top:10px">
-        <button class="btn round primary" id="play" title="Play or pause the song at this step (space)">▶</button>
-        <button class="btn" id="resolve" title="Play the whole process: step 0 to 32 on its own, sound following (A)">Resolve <kbd>A</kbd></button>
+        <button class="btn round primary" id="play" data-help="<b>Play</b> the song as it sounds at this step. Change steps while it plays and the sound switches in place. <kbd>space</kbd>">▶</button>
+        <button class="btn" id="resolve" data-help="<b>Resolve</b> plays the whole process: the song from the top while the steps run 0 to 32, finishing just before the last chorus. <kbd>A</kbd>">Resolve <kbd>A</kbd></button>
       </div>
       <div class="sub" id="audiostatus" aria-live="polite"></div>
     </div>
   </div>
-  <input type="range" id="slider" min="0" max="32" step="1" value="0" aria-label="Step">
-  <div class="pace" title="How fast Resolve moves through the steps: right is faster ([ slower, ] faster)">
-    <span>Pace</span><input type="range" id="pacerange" min="-6" max="-0.5" step="0.1" aria-label="Resolve speed"><small id="pacelabel"></small>
-  </div>
+  <input type="range" id="slider" min="0" max="32" step="1" value="0" aria-label="Step" data-help="<b>The steps</b>, 0 to 32. Drag to move through them; the sound follows.">
   <div class="viewrow">
     <div class="seg" id="modes">
-      <button data-mode="0" title="State (1): the song exactly as it is at this step, still part noise">State</button>
-      <button data-mode="1" title="Predicted (2): where the model thinks the song is heading from this step">Predicted</button>
-      <button data-mode="2" title="Finished (3): the end result, step 32">Finished</button>
+      <button data-mode="0" data-help="<b>State</b>: the song exactly as it is at this step, still partly noise. <kbd>1</kbd>">State</button>
+      <button data-mode="1" data-help="<b>Predicted</b>: where the model thinks the song is heading from this step. Often recognizable surprisingly early. <kbd>2</kbd>">Predicted</button>
+      <button data-mode="2" data-help="<b>Finished</b>: the end result, step 32. <kbd>3</kbd>">Finished</button>
     </div>
-    <button class="icon" id="ghost" title="Ghost (G): a see-through copy of the other view floating above" aria-label="Ghost overlay">
+    <button class="icon" id="ghost" data-help="<b>Ghost</b>: a see-through copy of the other view floating above the land. In State it shows where the song is heading; the gap is how far it still has to go. <kbd>G</kbd>" aria-label="Ghost overlay">
       <svg viewBox="0 0 20 20"><path d="M3 13 L7 9 L10 11 L17 5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-dasharray="2 2"/><path d="M3 16 L7 12 L10 14 L17 9" fill="none" stroke="currentColor" stroke-width="1.8"/></svg></button>
-    <button class="icon" id="settlebtn" title="Settling color (C): color is already decided, gray and glittering is still forming" aria-label="Settling color">
+    <button class="icon" id="settlebtn" data-help="<b>Settling color</b>: color marks the parts of the sound that already match the finished song; gray glitter is still forming. <kbd>C</kbd>" aria-label="Settling color">
       <svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="6.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M10 3.5 A6.5 6.5 0 0 1 10 16.5 Z" fill="currentColor"/></svg></button>
   </div>
   <button class="btn" id="markbtn" hidden title="Mark what you can hear at this step (M)">Mark what I hear <kbd>M</kbd></button>
@@ -50,9 +49,10 @@
 
   <h3>When each pitch range locks in <small>click to jump</small></h3>
   <div class="bars" id="bands"></div>
-  <canvas id="settlemap" title="Rows are frequency bands (low at bottom), columns are steps. Brightness: how closely that band's energy follows the finished take. Ticks: the step from which it stays at 0.9 or better."></canvas>
+  <canvas id="settlemap" data-help="<b>When each pitch range locks in.</b> Rows are pitch ranges, bass at the bottom; columns are steps. Bright means that range already moves like the finished song, and a tick marks the step it locks in. Low end first, fine detail last. Click to jump."></canvas>
 
-  <div class="honest" id="honest"><b>Signal statistics, not listening results.</b> Whether you can hear a voice at a step is for your ears.</div>
+  <div class="honest" id="honest" data-help="Every number and color here is computed from the audio of this one take. They show where the signal changes, not what you can hear."><b>Signal statistics, not listening results.</b> Whether you can hear a voice at a step is for your ears.</div>
+  <div class="hoverhelp" id="hoverhelp" aria-live="polite"></div>
 </aside>
 
 <div class="panel dock" id="dock">
@@ -65,7 +65,7 @@
   <div class="gamepills" id="gamepills"></div>
 </div>
 <div class="keys"><kbd>space</kbd>play · <kbd>←</kbd><kbd>→</kbd>step · <kbd>1</kbd><kbd>2</kbd><kbd>3</kbd>view · <kbd>G</kbd>ghost · <kbd>C</kbd>color ·
-  <kbd>A</kbd>resolve · <kbd>[</kbd><kbd>]</kbd>pace · <kbd>,</kbd><kbd>.</kbd>seek 5 s · <kbd>R</kbd>reset camera · drag to orbit, scroll to zoom, click the land to seek</div>
+  <kbd>A</kbd>resolve · <kbd>,</kbd><kbd>.</kbd>seek 5 s · <kbd>R</kbd>reset camera · drag to orbit, scroll to zoom, click the land to seek</div>
 
 <script src="vendor/three/three.bundle.js"></script>
 <script src="data/focus.js"></script>

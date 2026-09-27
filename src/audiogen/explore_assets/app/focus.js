@@ -13,7 +13,8 @@
     `, `
     <h3 style="margin-top:0">Try it</h3>
     <p>Press <b>Resolve</b> and listen to the song come out of the noise. Tap <b>I hear…</b> the moment you hear a voice,
-      the words or the chords: a pin marks the spot on the time line. Blue rings on the dial are where machines heard them.</p>
+      the drums or the chords: a pin marks that moment in the song, and a dot on the dial marks the step. As the dots gather,
+      you can see the steps where the song really comes through.</p>
     <p><b>State</b> is the song at this step, <b>Predicted</b> where it is heading, <b>Finished</b> the end result.</p>
     `);
   document.getElementById('runlabel').innerHTML = `<b>${D.run}</b> · ${D.seconds.toFixed(0)} s · ${D.steps} steps`;
@@ -244,10 +245,14 @@
   }
   L.add('settling wall', new T.Vector3(wallX, 15, DEPTH / 2 + 2), 'tick big');
   (D.sections || []).forEach((s) => { if (s.start < D.seconds) L.add(s.label, new T.Vector3(xOfSec(s.start) + 1, 0, DEPTH / 2 + 5), 'tick'); });
+  L.add('sections: score time', new T.Vector3(-W / 2 - 14, 0, DEPTH / 2 + 5), 'tick');
 
   // --- state ------------------------------------------------------------------------
-  // Resolve's pace, seconds per step while the song plays. By default the 32 steps take one pass of the song.
-  const PACE_DEFAULT = Math.round(D.seconds / D.steps * 10) / 10;
+  // Resolve's pace, seconds per step while the song plays from the top: the 32 steps finish a second before the
+  // last chorus starts, so that chorus is heard fully resolved. Without sections, one pass of the song.
+  const lastChorus = (D.sections || []).filter((x) => x.label === 'chorus' && x.start > 0).pop();
+  const RESOLVE_BY = lastChorus ? lastChorus.start - 1 : D.seconds;
+  const PACE_DEFAULT = RESOLVE_BY / D.steps;
   const ui = {
     pace: PACE_DEFAULT,
     target: 0, shown: 0, mode: 0, ghost: true, settle: true, playing: false,
@@ -474,22 +479,17 @@
   }
   const markLayer = document.createElementNS('http://www.w3.org/2000/svg', 'g');
   ring.appendChild(markLayer);
-  // Machine listeners' first steps (bin/machine_listen.py), shown apart from a listener's: hollow rings, "machine" rows.
-  const MACHINE = D.machine;
-  function machineFirst(view) {
-    const byStep = {};
-    Object.entries((MACHINE && MACHINE[view]) || {}).forEach(([f, s]) => (byStep[s] = byStep[s] || []).push(f));
-    return byStep;
-  }
   function drawMarks() {
-    const view = viewKey(), byStep = firstHeard(view), byMachine = machineFirst(view), now = Math.round(ui.target);
-    const reached = (s) => (+s <= now ? ' reached' : '');
-    markLayer.innerHTML = Object.entries(byStep).map(([s, names]) => {
+    const view = viewKey(), now = Math.round(ui.target), reached = (s) => (+s <= now ? ' reached' : '');
+    const mine = heard[view] || {}, perStep = {};
+    const own = LOCAL ? Object.entries(firstHeard(view)).map(([s, names]) => {   // the author's own marks, served locally
       const [x, y] = pt(ang(+s), R - 13);
       return `<g class="heardmark${reached(s)}"><circle cx="${x}" cy="${y}" r="3.2"/><title>Step ${s}: ${names.join(', ')}</title></g>`;
-    }).join('') + Object.entries(byMachine).map(([s, fs]) => {
-      const [x, y] = pt(ang(+s), R - 22);
-      return `<g class="machinemark${reached(s)}"><circle cx="${x}" cy="${y}" r="3"/><title>Step ${s}, a machine: ${fs.map((f) => LABEL[f] || f).join(', ')}</title></g>`;
+    }).join('') : '';
+    markLayer.innerHTML = own + CUES.filter((c) => mine[c.id]).map((c) => {
+      const s = mine[c.id].step, k = (perStep[s] = (perStep[s] || 0) + 1) - 1;
+      const [x, y] = pt(ang(s), R - 13 - k * 7);
+      return `<g class="cuemark${reached(s)}" style="--c:${c.color}"><circle cx="${x}" cy="${y}" r="3.2"/><title>Step ${s}: ${c.label}</title></g>`;
     }).join('');
   }
   const canMark = LOCAL || (() => { try { return !!window.localStorage; } catch (e) { return false; } })();
@@ -522,86 +522,131 @@
       .then((j) => { HEARD.state = j.state; HEARD.predicted = j.predicted; drawMarks(); drawMarker(); drawGame(); })
       .catch((e) => $('marker').insertAdjacentHTML('beforeend', `<div class="dim">Not saved: ${e.message}</div>`));
   }
-  // The listening game: small "I hear..." buttons over the landscape for the things the machines mark, so a
-  // visitor races them without finding a key. A tap marks the step as the first time they heard it, and drops
-  // a pin on the time line where the song was when they heard it (kept in this browser, beside the marks).
-  const GAME = [['vocal_present', 'a voice', '#ff8fcf'], ['words_partially_intelligible', 'some words', '#c9a6ff'],
-                ['words_intelligible', 'all the words', '#ffb070'], ['harmony_recognizable', 'the chords', '#7fe0b4']];
-  const AT = `${STORE}-at`;
-  let heardAt = { state: {}, predicted: {} };
-  try { heardAt = { ...heardAt, ...JSON.parse(localStorage.getItem(AT) || '{}') }; } catch (e) { /* private mode */ }
-  const saveAt = () => { try { localStorage.setItem(AT, JSON.stringify(heardAt)); } catch (e) { /* private mode */ } };
-  const pins = Object.fromEntries(GAME.map(([f, , c]) => {
-    const it = L.add('<span class="pinhead"></span>', new T.Vector3(), 'pin');
-    it.el.style.setProperty('--c', c); it.visible = false;
-    return [f, it];
-  }));
-  function firstMine(view, field) {
-    const steps = Object.keys(HEARD[view] || {}).map(Number).sort((a, b) => a - b);
-    return steps.find((st) => HEARD[view][st][field] === true);
+  // The listening game. The machines only decide what to listen for and when: each part of the finished song
+  // has the time it first comes in (bin/find_entries.py), and its "I hear..." button appears once the song has
+  // reached it, a few at a time. A tap flies to a pin at that moment on the time line, with a line down into the
+  // open space under the land, and puts a dot on the dial at the step. Kept in this browser (and on disk locally).
+  const PARTS = {
+    drums: ['the drums', '#7fe0b4', 'beat_recognizable'], bass: ['the bass', '#8fb8ff', 'bass_recognizable'],
+    voice: ['a voice', '#ff8fcf', 'vocal_present'], words: ['the words', '#ffb070', 'words_intelligible'],
+    chords: ['the chords', '#c9a6ff', 'harmony_recognizable'], guitar: ['a guitar', '#ffe07a', 'instrument_identity_recognizable'],
+    piano: ['a piano', '#9ff0ff', 'instrument_identity_recognizable'], other: ['the other instruments', '#d6dcef', 'instrument_identity_recognizable'],
+  };
+  const CUES = (D.entries || [{ id: 'voice', at: 0 }, { id: 'words', at: 0 }, { id: 'chords', at: 0 }])
+    .filter((e) => PARTS[e.id]).map((e) => ({ id: e.id, at: e.at, label: e.label || PARTS[e.id][0], color: PARTS[e.id][1] }));
+  const SHOW = 3;
+  const CSTORE = `${STORE}-cues`;
+  let heard = { state: {}, predicted: {} };
+  try { heard = { ...heard, ...JSON.parse(localStorage.getItem(CSTORE) || '{}') }; } catch (e) { /* private mode */ }
+  const saveHeard = () => { try { localStorage.setItem(CSTORE, JSON.stringify(heard)); } catch (e) { /* private mode */ } };
+  const pinBox = document.createElement('div'); pinBox.className = 'pins'; document.body.appendChild(pinBox);
+  const pinEls = {};
+  function pinFor(c) {
+    if (!pinEls[c.id]) {
+      const el = document.createElement('div'); el.className = 'pin'; el.style.setProperty('--c', c.color);
+      el.innerHTML = '<i class="anchor"></i><i class="stem"></i><span class="tag"><i></i><em></em></span>';
+      pinBox.appendChild(el); pinEls[c.id] = el;
+    }
+    return pinEls[c.id];
   }
-  function claim(view, field, step) {                 // this step becomes the first; earlier and later taps of it go
-    Object.keys(HEARD[view] || {}).map(Number).forEach((st) => {
-      if (st !== step && HEARD[view][st][field] === true) mark(view, st, field, null);
+  const pv = new T.Vector3();
+  function placePins() {                              // every frame: pins follow the camera
+    const view = viewKey(), mine = heard[view] || {}, w = st.host.clientWidth, h = st.host.clientHeight;
+    const game = $('game').getBoundingClientRect(), floor = (game.height ? game.top : h - 120) - 14;
+    const lanes = [];
+    CUES.filter((c) => mine[c.id]).map((c) => {
+      pv.set(xOfSec(mine[c.id].at), 0, DEPTH / 2 + 7).project(camera);
+      return { c, x: (pv.x + 1) / 2 * w, y: (1 - pv.y) / 2 * h };
+    }).sort((p, q) => p.x - q.x).forEach(({ c, x, y }) => {
+      let lane = lanes.findIndex((end) => end < x - 6);   // stagger the tags so neighbours do not collide
+      if (lane < 0) lane = lanes.length;
+      lanes[lane] = x + 86;
+      const base = Math.max(y + 26, floor - lane * 18);
+      const el = pinFor(c);
+      el.hidden = ui.mode === 2;
+      el.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px)`;
+      el.style.setProperty('--len', `${(base - y).toFixed(1)}px`);
     });
-    heardAt[view][field] = audio.time(); saveAt();
-    mark(view, step, field, true);
+    Object.entries(pinEls).forEach(([id, el]) => { if (!mine[id]) el.hidden = true; });
   }
-  function clearMine() {                               // a visitor's own marks only; the machines' stay
+  function drawPinTags() {
+    const view = viewKey(), mine = heard[view] || {};
+    CUES.forEach((c) => {
+      if (!mine[c.id]) return;
+      const el = pinFor(c);
+      el.querySelector('em').textContent = `${c.label.replace(/^(the|a) /, '')} · step ${mine[c.id].step}`;
+      el.title = `You heard ${c.label} at step ${mine[c.id].step}, ${fmt(mine[c.id].at)} into the song`;
+    });
+  }
+  function claim(c, chip) {
+    const view = viewKey(), step = Math.round(ui.target), at = audio.time();
+    heard[view] = { ...(heard[view] || {}), [c.id]: { step, at } }; saveHeard();
+    if (LOCAL) mark(view, step, PARTS[c.id][2], true);
+    drawPinTags(); placePins(); drawMarks();
+    const from = chip.getBoundingClientRect(), anchor = pinFor(c).querySelector('.anchor').getBoundingClientRect();
+    const fly = document.createElement('div'); fly.className = 'fly'; fly.style.setProperty('--c', c.color);
+    fly.style.left = `${from.left + from.width / 2}px`; fly.style.top = `${from.top + from.height / 2}px`;
+    document.body.appendChild(fly);
+    const pin = pinFor(c); pin.classList.add('landing');
+    requestAnimationFrame(() => {
+      fly.style.transform = `translate(${anchor.left + anchor.width / 2 - from.left - from.width / 2}px, ${anchor.top + anchor.height / 2 - from.top - from.height / 2}px) scale(.5)`;
+      fly.style.opacity = '0.2';
+    });
+    setTimeout(() => { fly.remove(); pin.classList.remove('landing'); }, reduced ? 0 : 650);
+    drawGame();
+  }
+  function clearMine() {                               // a visitor's own marks only
     HEARD.state = {}; HEARD.predicted = {}; localStorage.removeItem(STORE);
-    heardAt = { state: {}, predicted: {} }; localStorage.removeItem(AT);
-    drawMarks(); drawMarker(); drawGame();
+    heard = { state: {}, predicted: {} }; localStorage.removeItem(CSTORE);
+    drawMarks(); drawMarker(); drawGame(); placePins();
   }
-  function drawPins(view, theirs) {
-    GAME.forEach(([f, what]) => {
-      const it = pins[f], mine = firstMine(view, f), t = heardAt[view] && heardAt[view][f];
-      it.visible = ui.mode !== 2 && mine !== undefined && t != null;
-      if (!it.visible) return;
-      it.pos.set(xOfSec(t), 0, DEPTH / 2 + 7);
-      it.el.querySelector('.pinhead').textContent = mine;
-      it.el.title = `You heard ${what} at step ${mine}, ${fmt(t)} into the song`
-        + (theirs[f] === undefined ? '' : `; a machine at step ${theirs[f]}`);
-    });
+  let shownKey = '';
+  function dueCues() {
+    const mine = heard[viewKey()] || {}, t = audio.time();
+    return CUES.filter((c) => !mine[c.id] && c.at <= t + 0.5).slice(0, SHOW);
   }
   function drawGame() {
     const box = $('game');
-    const view = viewKey(), s = Math.round(ui.target), theirs = (MACHINE && MACHINE[view]) || {};
-    drawPins(view, theirs);
     box.hidden = !canMark || ui.mode === 2;
+    drawPinTags();
     if (box.hidden) return;
-    const done = GAME.filter(([f]) => firstMine(view, f) !== undefined).length;
-    $('gamecue').textContent = done === GAME.length ? ''
-      : ui.playing || ui.animating ? 'Tap the moment you hear it'
-      : done ? '' : `Press Resolve, then tap the moment you hear it.${MACHINE ? ' Can you beat the machines?' : ''}`;
-    $('gamepills').innerHTML = GAME.map(([f, what, c]) => {
-      const mine = firstMine(view, f), them = theirs[f];
-      if (mine === undefined) return `<button class="gamepill" style="--c:${c}" data-f="${f}">I hear ${what}</button>`;
-      const vs = them === undefined ? '' : mine < them ? `${them - mine} ahead` : mine > them ? `${mine - them} behind` : 'tied';
-      return `<button class="gamepill got" style="--c:${c}" data-f="${f}" title="Tap to move it to step ${s}. Against the machine: steps ahead or behind.">`
-        + `<i></i>${what} <b>${mine}</b>${vs ? `<small>${vs}</small>` : ''}</button>`;
-    }).join('') + (!LOCAL && done ? '<button class="gamepill again" id="gameagain" title="Clear your marks and start from step 0" aria-label="Try again">↺</button>' : '');
+    const mine = heard[viewKey()] || {}, done = CUES.filter((c) => mine[c.id]).length, due = dueCues();
+    shownKey = due.map((c) => c.id).join();
+    $('gamecue').textContent = done === CUES.length ? 'Every part marked. The dots on the dial show the steps where the song came through.'
+      : due.length ? (ui.playing || ui.animating ? 'Tap the moment you hear it' : '')
+      : ui.playing || ui.animating ? 'Listen…' : 'Press Resolve, then tap the moment you hear each part come in.';
+    const old = new Set([...$('gamepills').querySelectorAll('[data-id]')].map((b) => b.dataset.id));
+    $('gamepills').innerHTML = due.map((c) => `<button class="gamepill${old.has(c.id) ? '' : ' enter'}" style="--c:${c.color}" data-id="${c.id}">I hear ${c.label}</button>`).join('')
+      + (!LOCAL && done ? '<button class="gamepill again" id="gameagain" title="Clear your marks and start from step 0" aria-label="Start over">↺</button>' : '');
     const again = $('gamepills').querySelector('#gameagain');
-    if (again) again.onclick = () => { clearMine(); if (ui.animating) $('resolve').click(); setStep(0); };
-    $('gamepills').querySelectorAll('.gamepill:not(.again)').forEach((b) => (b.onclick = () => {
-      claim(view, b.dataset.f, Math.round(ui.target));
-      b.classList.add('pop');
-    }));
+    if (again) again.onclick = () => { clearMine(); if (ui.animating) $('resolve').click(); setStep(0); audio.seek(0); };
+    $('gamepills').querySelectorAll('[data-id]').forEach((b) => (b.onclick = () => claim(CUES.find((c) => c.id === b.dataset.id), b)));
   }
+  st.onFrame(() => { placePins(); if (!$('game').hidden && dueCues().map((c) => c.id).join() !== shownKey) drawGame(); });
   $('markbtn').hidden = !LOCAL;
   $('markbtn').onclick = () => { marking = !marking; $('markbtn').classList.toggle('on', marking); drawMarker(); };
+
+  // Hover help: the panel's controls describe themselves in the space at its foot, not in tooltips.
+  const HELP_IDLE = 'Point at anything in this panel to see what it shows.';
+  const hh = $('hoverhelp');
+  hh.innerHTML = HELP_IDLE;
+  $('panel').addEventListener('pointerover', (e) => {
+    const el = e.target.closest('[data-help]'); hh.innerHTML = el ? el.dataset.help : HELP_IDLE; hh.classList.toggle('on', !!el);
+  });
+  $('panel').addEventListener('pointerleave', () => { hh.innerHTML = HELP_IDLE; hh.classList.remove('on'); });
 
   // metrics
   const series = (set, fn) => D.metrics.map((m) => fn(m[set] || {}));
   const meanSettle = (arr, s) => { let t = 0; for (let b = 0; b < B; b++) t += arr[s * B + b]; return t / B / 255; };
   const METRICS = [
-    ['Waveform match', 'Waveform correlation with the finished take, sample by sample', (m) => m.correlation_final, (v) => v],
-    ['Latent match', 'Cosine similarity with the final latent', (m) => m.cosine_final, (v) => v],
-    ['Band agreement', 'Band envelope agreement, mean over pitch ranges (map below)', null, (v) => v],
-    ['Brightness Hz', 'Spectral centroid in Hz', (m) => m.spectral_centroid_hz, (v) => v / 5000],
+    ['Waveform match', '<b>Waveform match</b>: how closely the sound at this step lines up with the finished song, sample by sample. 1 is identical. The faint line is the other view.', (m) => m.correlation_final, (v) => v],
+    ['Latent match', '<b>Latent match</b>: how close the model\'s inner version of the song is to its final one. It climbs long before the sound does.', (m) => m.cosine_final, (v) => v],
+    ['Band agreement', '<b>Band agreement</b>: across pitch ranges, how closely each one\'s loudness over time follows the finished song. The map below shows it range by range.', null, (v) => v],
+    ['Brightness Hz', '<b>Brightness</b>: where the sound\'s energy is centered, in Hz. Noise is bright and hissy; it settles toward the song\'s own.', (m) => m.spectral_centroid_hz, (v) => v / 5000],
   ];
   const metricEls = METRICS.map(([name, sub]) => {
     const d = document.createElement('div'); d.className = 'metric';
-    d.title = sub; d.innerHTML = `<div class="name">${name}</div><div class="val">–</div><canvas></canvas>`;
+    d.dataset.help = sub; d.innerHTML = `<div class="name">${name}</div><div class="val">–</div><canvas></canvas>`;
     $('metrics').appendChild(d);
     return { val: d.querySelector('.val'), cv: d.querySelector('canvas') };
   });
@@ -706,16 +751,9 @@
   function setPlayIcon() { $('play').textContent = ui.playing ? '❚❚' : '▶'; if (typeof drawGame === 'function') drawGame(); }
   function togglePlay() { if (ui.playing) audio.pause(); else audio.start(); setPlayIcon(); }
   $('play').onclick = togglePlay;
-  function setPace(v) {
-    ui.pace = Math.min(6, Math.max(0.5, Math.round(v * 10) / 10));
-    $('pacerange').value = -ui.pace;                  // the slider is speed: right is faster
-    $('pacelabel').textContent = `1 step every ${ui.pace.toFixed(1)} s · the whole solve in ${fmtPace(ui.pace * D.steps)}`;
-  }
-  const fmtPace = (t) => (t >= 60 ? `${Math.floor(t / 60)}:${String(Math.round(t % 60)).padStart(2, '0')}` : `${Math.round(t)} s`);
-  $('pacerange').oninput = (e) => setPace(-e.target.value);
-  setPace(ui.pace);
   $('resolve').onclick = () => {
     ui.animating = !ui.animating; if (ui.animating && ui.target >= S) setStep(0, true); ui.animClock = 0;
+    if (ui.animating && ui.target === 0) audio.seek(0);                 // from the top, so the pace lands on the last chorus
     if (ui.animating && !ui.playing) { audio.start(); setPlayIcon(); }   // the process is something to hear, not only watch
     $('resolve').classList.toggle('on', ui.animating); drawGame();
   };
@@ -733,7 +771,6 @@
     else if (k === 'm' && LOCAL) $('markbtn').click();
     else if (k === 'c') $('settlebtn').click();
     else if (k === 'a') $('resolve').click();
-    else if (k === '[' || k === ']') setPace(ui.pace + (k === '[' ? 0.5 : -0.5));
     else if (k === ',') audio.seek(audio.time() - 5);
     else if (k === '.') audio.seek(audio.time() + 5);
     else if (k === 'r') { camera.position.copy(home.pos); controls.target.copy(home.target); }
