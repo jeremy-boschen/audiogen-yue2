@@ -29,6 +29,9 @@
   const bandZ = D.band_lo_hz.map((lo, b) => (0.5 - lf(Math.sqrt(lo * D.band_hi_hz[b]))) * DEPTH);
   const zOfHz = (f) => (0.5 - lf(f)) * DEPTH;
   const xOfSec = (s) => (s / D.seconds - 0.5) * W;
+  // Five plain-named pitch bands: a ruler at the end of the land, and an optional tint across it.
+  const PITCH = [['bass', 40, 250, '#ff7a59'], ['body', 250, 1000, '#ffc15e'], ['voice & lead', 1000, 4000, '#7fe0b4'],
+                 ['bite', 4000, 10000, '#5cb8ff'], ['air', 10000, 16000, '#c49bff']];
 
   const st = EX.stage(document.getElementById('stage'), { bloom: 0.45, radius: 0.45, threshold: 0.6 });
   const { scene, camera, controls } = st;
@@ -86,7 +89,9 @@
     uState: { value: arrayTex(state) }, uPred: { value: arrayTex(pred) },
     uSetS: { value: settleTex(settleS) }, uSetP: { value: settleTex(settleP) },
     uStep: { value: 0 }, uSteps: { value: S }, uMix: { value: 0 }, uFin: { value: 0 },
-    uH: { value: H }, uTime: { value: 0 }, uPlayX: { value: -W / 2 }, uSettleOn: { value: 1 },
+    uH: { value: H }, uTime: { value: 0 }, uPlayX: { value: -W / 2 }, uSettleOn: { value: 1 }, uBands: { value: 0 },
+    uBandZ: { value: new T.Vector4(...PITCH.slice(1).map(([, lo]) => zOfHz(lo))) },
+    uBandC: { value: PITCH.map(([, , , c]) => new T.Color(c)) },
     uTexel: { value: new T.Vector2(1 / C, 1 / B) }, uBg: { value: new T.Color(EX.PALETTE.bg) },
     uHoverZ: { value: -999 }, uLift: { value: 0 }, uGhostMix: { value: 1 }, uAlpha: { value: 1 },
   };
@@ -125,7 +130,7 @@
       gl_Position = projectionMatrix * mv;
     }`;
   const FRAG_COMMON = `
-    uniform float uTime, uPlayX, uSettleOn, uHoverZ, uAlpha; uniform vec3 uBg;
+    uniform float uTime, uPlayX, uSettleOn, uHoverZ, uAlpha, uBands; uniform vec3 uBg; uniform vec4 uBandZ; uniform vec3 uBandC[5];
     varying float vH; varying float vSettle; varying vec3 vN; varying vec3 vW; varying float vDist;
     ${EX.GLSL_RAMP}
     float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
@@ -148,6 +153,12 @@
       col += vec3(1.0, 0.86, 1.0) * exp(-d * d * 1.6) * 1.35;
       col += base * exp(-abs(d) * 0.18) * 0.22 * step(d, 0.0);
       float hz = vW.z - uHoverZ; col += vec3(0.5, 0.7, 1.0) * exp(-hz * hz * 3.0) * 0.35;
+      if (uBands > 0.001) {                         // pitch bands: tint each lane in its band's color
+        float z = vW.z;
+        vec3 bc = z > uBandZ.x ? uBandC[0] : z > uBandZ.y ? uBandC[1] : z > uBandZ.z ? uBandC[2] : z > uBandZ.w ? uBandC[3] : uBandC[4];
+        float lum = dot(col, vec3(0.3, 0.55, 0.15));
+        col = mix(col, bc * (0.25 + lum * 1.6), 0.7 * uBands);
+      }
       float fog = 1.0 - exp(-pow(vDist * 0.0036, 2.0));
       return mix(col, uBg, fog);
     }`;
@@ -240,9 +251,13 @@
   const L = EX.labels(st.host, camera);
   for (let s = 0; s <= D.seconds + 0.01; s += 20) L.add(`${s}s`, new T.Vector3(xOfSec(s), 0, DEPTH / 2 + 9));
   L.add('time →', new T.Vector3(W / 2 + 10, 0, DEPTH / 2 + 9), 'tick big');
-  for (const [f, t] of [[100, '100 Hz'], [300, '300'], [1000, '1 kHz'], [3000, '3 kHz'], [10000, '10 kHz']]) {
-    L.add(t, new T.Vector3(W / 2 + 12, 0, zOfHz(f)), 'tick hz');
-  }
+  PITCH.forEach(([name, lo, hi, color]) => {
+    const z0 = zOfHz(lo), z1 = zOfHz(hi);
+    const bar = new T.Mesh(new T.PlaneGeometry(3, Math.abs(z0 - z1) - 0.4), new T.MeshBasicMaterial({ color, transparent: true, opacity: 0.85, toneMapped: false }));
+    bar.rotation.x = -Math.PI / 2; bar.position.set(W / 2 + 4, 0.05, (z0 + z1) / 2); scene.add(bar);
+    const el = L.add(name, new T.Vector3(W / 2 + 8, 0, (z0 + z1) / 2), 'tick band').el;
+    el.style.setProperty('--c', color);
+  });
   L.add('settling wall', new T.Vector3(wallX, 15, DEPTH / 2 + 2), 'tick big');
   (D.sections || []).forEach((s) => { if (s.start < D.seconds) L.add(s.label, new T.Vector3(xOfSec(s.start) + 1, 0, DEPTH / 2 + 5), 'tick'); });
   L.add('sections: score time', new T.Vector3(-W / 2 - 14, 0, DEPTH / 2 + 5), 'tick');
@@ -255,7 +270,7 @@
   const PACE_DEFAULT = RESOLVE_BY / D.steps;
   const ui = {
     pace: PACE_DEFAULT,
-    target: 0, shown: 0, mode: 0, ghost: true, settle: true, playing: false,
+    target: 0, shown: 0, mode: 0, ghost: true, settle: true, bands: false, playing: false,
     mixT: 0, finT: 0, animating: false,
   };
 
@@ -539,55 +554,80 @@
   let heard = { state: {}, predicted: {} };
   try { heard = { ...heard, ...JSON.parse(localStorage.getItem(CSTORE) || '{}') }; } catch (e) { /* private mode */ }
   const saveHeard = () => { try { localStorage.setItem(CSTORE, JSON.stringify(heard)); } catch (e) { /* private mode */ } };
+  // Pins: a dot per part at the moment on the time line; parts heard close together share one tag, a stack,
+  // and the tags spread along the open space under the land on angled leader lines, the way the take map
+  // clusters takes. Laid out again every frame, so they follow the camera.
   const pinBox = document.createElement('div'); pinBox.className = 'pins'; document.body.appendChild(pinBox);
-  const pinEls = {};
-  function pinFor(c) {
-    if (!pinEls[c.id]) {
-      const el = document.createElement('div'); el.className = 'pin'; el.style.setProperty('--c', c.color);
-      el.innerHTML = '<i class="anchor"></i><i class="stem"></i><span class="tag"><i></i><em></em></span>';
-      pinBox.appendChild(el); pinEls[c.id] = el;
+  const pinLines = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); pinBox.appendChild(pinLines);
+  const anchors = {}, groups = new Map();
+  function anchorFor(c) {
+    if (!anchors[c.id]) {
+      const el = document.createElement('i'); el.className = 'pinanchor'; el.style.setProperty('--c', c.color);
+      pinBox.appendChild(el); anchors[c.id] = el;
     }
-    return pinEls[c.id];
+    return anchors[c.id];
   }
   const pv = new T.Vector3();
-  function placePins() {                              // every frame: pins follow the camera
+  function placePins() {
     const view = viewKey(), mine = heard[view] || {}, w = st.host.clientWidth, h = st.host.clientHeight;
-    const game = $('game').getBoundingClientRect(), floor = (game.height ? game.top : h - 120) - 14;
-    const lanes = [];
-    CUES.filter((c) => mine[c.id]).map((c) => {
+    const off = ui.mode === 2;
+    Object.entries(anchors).forEach(([id, el]) => { el.hidden = off || !mine[id]; });
+    const pts = off ? [] : CUES.filter((c) => mine[c.id]).map((c) => {
       pv.set(xOfSec(mine[c.id].at), 0, DEPTH / 2 + 7).project(camera);
-      return { c, x: (pv.x + 1) / 2 * w, y: (1 - pv.y) / 2 * h };
-    }).sort((p, q) => p.x - q.x).forEach(({ c, x, y }) => {
-      let lane = lanes.findIndex((end) => end < x - 6);   // stagger the tags so neighbours do not collide
-      if (lane < 0) lane = lanes.length;
-      lanes[lane] = x + 86;
-      const base = Math.max(y + 26, floor - lane * 18);
-      const el = pinFor(c);
-      el.hidden = ui.mode === 2;
-      el.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px)`;
-      el.style.setProperty('--len', `${(base - y).toFixed(1)}px`);
+      const x = (pv.x + 1) / 2 * w, y = (1 - pv.y) / 2 * h;
+      anchorFor(c).style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px)`;
+      return { c, x, y };
+    }).sort((p, q) => p.x - q.x);
+    const clusters = [];
+    pts.forEach((p) => {
+      const last = clusters[clusters.length - 1], q = last && last[last.length - 1];
+      if (q && Math.hypot(p.x - q.x, p.y - q.y) < 30) last.push(p); else clusters.push([p]);
     });
-    Object.entries(pinEls).forEach(([id, el]) => { if (!mine[id]) el.hidden = true; });
-  }
-  function drawPinTags() {
-    const view = viewKey(), mine = heard[view] || {};
-    CUES.forEach((c) => {
-      if (!mine[c.id]) return;
-      const el = pinFor(c);
-      el.querySelector('em').textContent = `${c.label.replace(/^(the|a) /, '')} · step ${mine[c.id].step}`;
-      el.title = `You heard ${c.label} at step ${mine[c.id].step}, ${fmt(mine[c.id].at)} into the song`;
+    const game = $('game').getBoundingClientRect(), floor = (game.height ? game.top : h - 120) - 10;
+    const panel = $('panel').getBoundingClientRect(), L0 = 16, R0 = w > 900 ? panel.left - 16 : w - 16;
+    const seen = new Set();
+    const laid = clusters.map((cl) => {
+      const key = cl.map((p) => p.c.id).join();
+      seen.add(key);
+      let el = groups.get(key);
+      if (!el) { el = document.createElement('div'); el.className = 'pintags'; pinBox.appendChild(el); groups.set(key, el); }
+      const html = cl.map((p) => `<div style="--c:${p.c.color}"><i></i>${p.c.label.replace(/^(the|a) /, '')} <b>${mine[p.c.id].step}</b></div>`).join('');
+      if (el.dataset.html !== html) { el.innerHTML = html; el.dataset.html = html; }
+      el.hidden = false;
+      const jx = cl.reduce((t, p) => t + p.x, 0) / cl.length, jy = Math.max(...cl.map((p) => p.y)) + (cl.length > 1 ? 16 : 0);
+      return { cl, el, jx, jy, gw: el.offsetWidth, gh: el.offsetHeight };
     });
+    groups.forEach((el, key) => { if (!seen.has(key)) el.hidden = true; });
+    laid.forEach((g, i) => { g.x = Math.max(L0, g.jx - g.gw / 2, i ? laid[i - 1].x + laid[i - 1].gw + 14 : L0); });
+    for (let i = laid.length - 1; i >= 0; i--) {         // pushed off the right edge: slide back left
+      const limit = i < laid.length - 1 ? laid[i + 1].x - 14 : R0;
+      laid[i].x = Math.max(L0, Math.min(laid[i].x, limit - laid[i].gw));
+    }
+    let svg = '';
+    laid.forEach((g) => {
+      const top = Math.max(floor - g.gh, g.jy + 22);
+      g.el.style.transform = `translate(${g.x.toFixed(1)}px, ${top.toFixed(1)}px)`;
+      const ax = Math.min(g.x + g.gw - 10, Math.max(g.x + 10, g.jx));   // where the leader meets the tag
+      if (g.cl.length > 1) {
+        g.cl.forEach((p) => { svg += `<line x1="${p.x}" y1="${p.y}" x2="${g.jx}" y2="${g.jy}" stroke="${p.c.color}" stroke-opacity=".7"/>`; });
+        svg += `<circle cx="${g.jx}" cy="${g.jy}" r="2" fill="#c9d2e3"/><line x1="${g.jx}" y1="${g.jy}" x2="${ax}" y2="${top - 3}" stroke="#c9d2e3" stroke-opacity=".45"/>`;
+      } else {
+        const p = g.cl[0];
+        svg += `<line x1="${p.x}" y1="${p.y}" x2="${ax}" y2="${top - 3}" stroke="${p.c.color}" stroke-opacity=".7"/>`;
+      }
+    });
+    pinLines.innerHTML = svg;
   }
   function claim(c, chip) {
     const view = viewKey(), step = Math.round(ui.target), at = audio.time();
     heard[view] = { ...(heard[view] || {}), [c.id]: { step, at } }; saveHeard();
     if (LOCAL) mark(view, step, PARTS[c.id][2], true);
-    drawPinTags(); placePins(); drawMarks();
-    const from = chip.getBoundingClientRect(), anchor = pinFor(c).querySelector('.anchor').getBoundingClientRect();
+    placePins(); drawMarks();
+    const from = chip.getBoundingClientRect(), anchor = anchorFor(c).getBoundingClientRect();
     const fly = document.createElement('div'); fly.className = 'fly'; fly.style.setProperty('--c', c.color);
     fly.style.left = `${from.left + from.width / 2}px`; fly.style.top = `${from.top + from.height / 2}px`;
     document.body.appendChild(fly);
-    const pin = pinFor(c); pin.classList.add('landing');
+    const pin = anchorFor(c); pin.classList.add('landing');
     requestAnimationFrame(() => {
       fly.style.transform = `translate(${anchor.left + anchor.width / 2 - from.left - from.width / 2}px, ${anchor.top + anchor.height / 2 - from.top - from.height / 2}px) scale(.5)`;
       fly.style.opacity = '0.2';
@@ -608,7 +648,6 @@
   function drawGame() {
     const box = $('game');
     box.hidden = !canMark || ui.mode === 2;
-    drawPinTags();
     if (box.hidden) return;
     const mine = heard[viewKey()] || {}, done = CUES.filter((c) => mine[c.id]).length, due = dueCues();
     shownKey = due.map((c) => c.id).join();
@@ -627,7 +666,7 @@
   $('markbtn').onclick = () => { marking = !marking; $('markbtn').classList.toggle('on', marking); drawMarker(); };
 
   // Hover help: the panel's controls describe themselves in the space at its foot, not in tooltips.
-  const HELP_IDLE = 'Point at anything in this panel to see what it shows.';
+  const HELP_IDLE = 'Point at anything in this panel and it is explained here.';
   const hh = $('hoverhelp');
   hh.innerHTML = HELP_IDLE;
   $('panel').addEventListener('pointerover', (e) => {
@@ -639,10 +678,10 @@
   const series = (set, fn) => D.metrics.map((m) => fn(m[set] || {}));
   const meanSettle = (arr, s) => { let t = 0; for (let b = 0; b < B; b++) t += arr[s * B + b]; return t / B / 255; };
   const METRICS = [
-    ['Waveform match', '<b>Waveform match</b>: how closely the sound at this step lines up with the finished song, sample by sample. 1 is identical. The faint line is the other view.', (m) => m.correlation_final, (v) => v],
-    ['Latent match', '<b>Latent match</b>: how close the model\'s inner version of the song is to its final one. It climbs long before the sound does.', (m) => m.cosine_final, (v) => v],
-    ['Band agreement', '<b>Band agreement</b>: across pitch ranges, how closely each one\'s loudness over time follows the finished song. The map below shows it range by range.', null, (v) => v],
-    ['Brightness Hz', '<b>Brightness</b>: where the sound\'s energy is centered, in Hz. Noise is bright and hissy; it settles toward the song\'s own.', (m) => m.spectral_centroid_hz, (v) => v / 5000],
+    ['Waveform match', '<b>Waveform match</b> compares the actual sound wave at this step with the finished song\'s, moment by moment: 1 is identical, 0 unrelated. It stays low until late, because tiny timing differences count against it even when the song already sounds right.', (m) => m.correlation_final, (v) => v],
+    ['Latent match', '<b>Latent match</b> compares the model\'s own internal sketch of the song with its final sketch. It climbs early: the model settles what the song is well before the sound itself comes clean.', (m) => m.cosine_final, (v) => v],
+    ['Band agreement', '<b>Band agreement</b> asks, for each pitch band, whether it gets louder and quieter at the same moments as the finished song. It shows the song\'s shape, its rhythm and sections, arriving before the detail. The map below shows it band by band.', null, (v) => v],
+    ['Brightness Hz', '<b>Brightness</b> is the average pitch of all the sound energy, in Hz. Static is bright and hissy, so it starts high and drifts toward the song\'s own brightness as the noise clears.', (m) => m.spectral_centroid_hz, (v) => v / 5000],
   ];
   const metricEls = METRICS.map(([name, sub]) => {
     const d = document.createElement('div'); d.className = 'metric';
@@ -675,6 +714,7 @@
     document.querySelectorAll('#modes button').forEach((b) => b.classList.toggle('on', +b.dataset.mode === ui.mode));
     $('ghost').classList.toggle('on', ui.ghost);
     $('settlebtn').classList.toggle('on', ui.settle);
+    $('bandsbtn').classList.toggle('on', ui.bands);
     const sel = setName === 'predicted' ? 1 : 0;
     METRICS.forEach((row, k) => {
       const raw = row[2] ? row[2](m[setName] || {}) : meanSettle(sel ? settleP : settleS, s);
@@ -761,6 +801,7 @@
   document.querySelectorAll('#modes button').forEach((b) => (b.onclick = () => setMode(+b.dataset.mode)));
   $('ghost').onclick = () => { ui.ghost = !ui.ghost; renderPanel(); };
   $('settlebtn').onclick = () => { ui.settle = !ui.settle; renderPanel(); };
+  $('bandsbtn').onclick = () => { ui.bands = !ui.bands; renderPanel(); };
   window.addEventListener('keydown', (e) => {
     const k = e.key.toLowerCase();
     if (k === ' ') { e.preventDefault(); togglePlay(); }
@@ -770,6 +811,7 @@
     else if (k === 'g') $('ghost').click();
     else if (k === 'm' && LOCAL) $('markbtn').click();
     else if (k === 'c') $('settlebtn').click();
+    else if (k === 'b') $('bandsbtn').click();
     else if (k === 'a') $('resolve').click();
     else if (k === ',') audio.seek(audio.time() - 5);
     else if (k === '.') audio.seek(audio.time() + 5);
@@ -825,6 +867,7 @@
     ui.mixT += (mixGoal - ui.mixT) * k; ui.finT += (finGoal - ui.finT) * k;
     uniforms.uStep.value = ui.shown; uniforms.uMix.value = ui.mixT; uniforms.uFin.value = ui.finT;
     uniforms.uSettleOn.value += ((ui.settle ? 1 : 0) - uniforms.uSettleOn.value) * k;
+    uniforms.uBands.value += ((ui.bands ? 1 : 0) - uniforms.uBands.value) * k;
     uniforms.uTime.value = reduced ? 0 : now;
     ghostUniforms.uGhostMix.value = ui.mode === 1 ? 0 : 1;
     ghostUniforms.uAlpha.value += ((ui.ghost ? 0.3 : 0) - ghostUniforms.uAlpha.value) * k;
