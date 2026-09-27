@@ -143,3 +143,11 @@ As measured, the knobs act on the whole mix, not the voice. The page renders eac
 - Test: Sunday Kitchen s2026 rendered plain, then with previews at 10 s and 30 s. abc, semantic, latent and pcm hashes were identical to each other and to the original capture (37fdd8d7…, dc2d4c9c…, 10a0fe7c…, b38cb4fa…).
 - The two previews cost 8.3 s together: 114.6 s plain vs 122.9 s with previews.
 - fp8 quantization is refused, because its AR preparation is not shown to survive the pause.
+
+## A preview on the CPU is too slow (2026-09-26)
+
+The idea was to run the sound stage for a preview on the CPU while the GPU keeps writing tokens. On this Mac (6 performance cores, 6 threads):
+- fp32: 1 s of song took 15.6 s and 2 s took 22.6 s, about 7 s per extra second of song on top of ~9 s of prefill. A 10 s preview would take ~80 s, against ~3 s paused on the GPU.
+- bf16: 62.8 s and 100.7 s.
+
+It would also hold a second, 13.6 GB fp32 copy of the model. Apple Silicon has no GPU partitioning, so two GPU jobs only take turns. Listen-so-far pauses on the GPU instead.
