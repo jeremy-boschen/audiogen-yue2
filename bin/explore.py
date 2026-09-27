@@ -191,7 +191,7 @@ def cmd_publish(args):
     _swap(index, "YuE2 generation microscope", "An exploration of how YuE2 generates songs")
     _swap(index, "<p>Three interactive 3D views: one take of one song resolving from noise, the four layers the model writes for it on one\n"
                  "       time axis, and every finished take of another song placed by how its sound moves. Each card names its song.",
-          f"<p>Two interactive 3D views of one song, <b>{args.title}</b>, as the open AI music model YuE2 makes it: the sound\n"
+          f"<p>Two interactive 3D views of one song, <b>{args.title}</b>, as YuE2, an open-weight AI music model, makes it: the sound\n"
           "       resolving from noise, and the four layers the model writes, on one time axis. Everything here comes from one\n"
           "       real generation, saved as it ran; the audio is volume-matched and compressed for the web.")
     start = index.read_text().index('    <a class="card" href="map.html">')

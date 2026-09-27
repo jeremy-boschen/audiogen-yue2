@@ -336,3 +336,34 @@ dfn[data-g] { font-style: inherit; text-decoration: underline dotted rgba(201, 1
 .gcard b { color: #fff; margin-right: 2px; }
 .gcard small, .hoverhelp small.tech { display: block; margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--line-soft);
                font: 11px/1.45 ui-monospace, 'SF Mono', monospace; color: var(--faint); }
+
+/* Phones. Upright: the panel becomes a sheet along the bottom, and the title shrinks to one line. Sideways: the panel
+   is a narrow column on the right. Either way the dock goes (the time bar on the land does its job), the top bar keeps
+   the tabs, HD and ?, and hover help, which needs a pointer that hovers, is not shown. */
+@media (max-width: 760px), (max-height: 500px) {
+  .top { height: 46px; gap: 10px; padding: 0 10px; }
+  .brand b, .brand small { display: none; }
+  .tabs a { padding: 6px 9px; font-size: 12px; white-space: nowrap; }
+  .tabs a kbd { display: none; }
+  .top .run { font-size: 0; margin-left: 0; }
+  .top .run .hdtoggle { font-size: 10px; margin-left: 0; }
+  .hero { top: 52px; left: 14px; right: 14px; max-width: none; }
+  .hero .kicker, .hero p { display: none; }
+  .hero h1 { font-size: 24px; }
+  .dock { display: none; }
+  .gamepill { font-size: 11px; padding: 4px 10px; }
+}
+@media (max-width: 760px) and (orientation: portrait) {
+  .panel.right { left: 0; right: 0; bottom: 0; top: auto; width: auto; height: 46vh; padding: 12px 14px;
+                 border-radius: 16px 16px 0 0; border-bottom: 0; }
+  .game, body.preparing .prep { left: 10px; right: 10px; bottom: calc(46vh + 10px); }
+  .panel.right .ringwrap { grid-template-columns: 120px 1fr; }
+  .panel.right .ring { width: 120px; height: 120px; }
+}
+@media (max-height: 500px) and (orientation: landscape) {
+  .panel.right { top: 50px; bottom: 8px; right: 8px; width: 300px; padding: 10px 12px; }   /* under the top bar */
+  .game, body.preparing .prep { left: 10px; right: 318px; bottom: 8px; }
+  .panel.right .ringwrap { grid-template-columns: 110px 1fr; }
+  .panel.right .ring { width: 110px; height: 110px; }
+}
+@media (hover: none) { .hoverhelp { display: none; } }

@@ -6,7 +6,7 @@
   EX.nav('focus');
   EX.help('focus', `
     <h2>Watching a song come into focus</h2>
-    <p>YuE2 is an open AI music model. Its last stage makes the detailed sound: for this take it refines the whole song
+    <p>YuE2 is an open-weight AI music model: anyone can download it and run it. Its last stage makes the detailed sound: for this take it refines the whole song
       together, starting from random noise, over 32 ${EX.g('step', 'steps')}, the way a photo develops. This page is one
       real song, saved at every step.</p>
     <p>The landscape is the sound, a ${EX.g('spectrogram', 'spectrogram')} in 3D. <b>Left to right</b> is time, <b>front to
@@ -65,12 +65,14 @@
     const panel = document.getElementById('panel').getBoundingClientRect();
     const hero = document.querySelector('.hero').getBoundingClientRect();
     const dock = document.getElementById('dock').getBoundingClientRect();
-    const wide = w > 900;
-    const L0 = 16, R0 = wide ? panel.left - 16 : w - 16, T0 = hero.bottom + 12, B0 = dock.top - 84;
+    // The panel runs down the right (desktop, phones held sideways) or is a sheet along the bottom (phones upright).
+    const side = panel.width > 0 && panel.left > w / 2, sheet = panel.width > 0 && panel.top > h / 3;
+    const L0 = w < 760 ? 96 : 16, R0 = side ? panel.left - 16 : w - 16, T0 = hero.bottom + 12;
+    const B0 = sheet ? panel.top - 64 : dock.height ? dock.top - 84 : h - 64;
     const keep = camera.position.clone(), p = new T.Vector3();
     camera.setViewOffset(w, h, 0, 0, w, h);
     let fit = 0.8, box;
-    for (; fit < 4; fit += 0.05) {
+    for (; fit < 9; fit += 0.05) {                     // narrow phones need the camera well back
       camera.position.copy(HOME_DIR).multiplyScalar(fit).add(home.target); camera.lookAt(home.target); camera.updateMatrixWorld();
       box = [Infinity, Infinity, -Infinity, -Infinity];
       for (const c of BOX) {
@@ -81,13 +83,14 @@
       if (box[2] - box[0] <= R0 - L0 && box[3] - box[1] <= B0 - T0) break;
     }
     home.pos.copy(camera.position);
+    controls.maxDistance = Math.max(420, home.pos.distanceTo(home.target) * 1.3);
     camera.setViewOffset(w, h, (box[0] + box[2] - L0 - R0) / 2, (box[1] + box[3] - T0 - B0) / 2, w, h);
     camera.position.copy(keep); camera.lookAt(controls.target); camera.updateMatrixWorld();
   }
   new ResizeObserver(frameView).observe(st.host);
   frameView();
   camera.position.copy(home.pos); controls.target.copy(home.target);
-  controls.minDistance = 30; controls.maxDistance = 420; controls.maxPolarAngle = Math.PI * 0.49;
+  controls.minDistance = 30; controls.maxPolarAngle = Math.PI * 0.49;   // maxDistance: frameView
   EX.dust(scene);
   EX.floor(scene, 700, -0.2);
 
@@ -332,7 +335,11 @@
   const audio = window.focusAudio = (() => {
     const Ctx = window.AudioContext || window.webkitAudioContext;
     const ctx = new Ctx();
-    const FADE = 0.06, KEEP = 8;
+    const FADE = 0.06, KEEP = 8, SWELL = 1.5;
+    // Everything goes through one master gain, which swells in over SWELL seconds whenever playback starts: the
+    // early steps are loud noise, and starting it at full volume made people jump.
+    const master = ctx.createGain();
+    master.connect(ctx.destination);
     const files = [D.audio.finished, ...D.audio.state.flatMap((s, i) => [s, D.audio.predicted[i]])];
     const unique = [...new Set(files)];
     const bytes = new Map(), buffers = new Map();
@@ -439,7 +446,7 @@
       const gain = ctx.createGain();
       gain.gain.setValueAtTime(0, when);
       gain.gain.linearRampToValueAtTime(weight, when + FADE);
-      gain.connect(ctx.destination);
+      gain.connect(master);
       const src = ctx.createBufferSource();
       src.buffer = buffer; src.connect(gain); src.start(when, Math.max(0, offset));
       return { src, gain };
@@ -475,6 +482,10 @@
       ctx.resume();
       if (startAt >= D.seconds - 0.05) startAt = 0;
       origin = ctx.currentTime + 0.05 - startAt;
+      const now = ctx.currentTime;                          // an even rise in loudness: -60 dB to full
+      master.gain.cancelScheduledValues(now);
+      master.gain.setValueAtTime(0.001, now);
+      master.gain.exponentialRampToValueAtTime(1, now + 0.05 + SWELL);
       playing = true; ui.playing = true;
       sound(Math.round(ui.target));
     }
@@ -655,7 +666,7 @@
       if (q && Math.hypot(p.x - q.x, p.y - q.y) < 30) last.push(p); else clusters.push([p]);
     });
     const game = $('game').getBoundingClientRect(), floor = (game.height ? game.top : h - 120) - 10;
-    const panel = $('panel').getBoundingClientRect(), L0 = 16, R0 = w > 900 ? panel.left - 16 : w - 16;
+    const panel = $('panel').getBoundingClientRect(), L0 = 16, R0 = panel.left > w / 2 ? panel.left - 16 : w - 16;
     const seen = new Set();
     const laid = clusters.map((cl) => {
       const key = cl.map((p) => p.c.id).join();

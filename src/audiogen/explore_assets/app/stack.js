@@ -6,7 +6,7 @@
   EX.nav('stack');
   EX.help('stack', `
     <h2>Four layers of one song</h2>
-    <p>This is an exploration of how YuE2, an open AI music model, generates a song. Everything here comes from one real
+    <p>This is an exploration of how YuE2, an open-weight AI music model that anyone can download and run, generates a song. Everything here comes from one real
       generation, saved as it ran.</p>
     <p>Before any sound exists, the model writes the song down in layers, each made from the one above it. This page stacks
       them like the floors of a building, all on one timeline: <b>left to right is time</b>.</p>
@@ -47,7 +47,20 @@
   const st = EX.stage($('stage'), { bloom: 0.55, radius: 0.5, threshold: 0.45, fov: 36 });
   const { scene, camera, controls } = st;
   const home = { pos: new T.Vector3(-92, 104, 150), target: new T.Vector3(8, 24, 0) };
+  const back = innerWidth < innerHeight ? 2.1 : innerHeight <= 500 ? 1.35 : 1;          // phones: step back so the labels fit
+  home.pos.sub(home.target).multiplyScalar(back).add(home.target);
   camera.position.copy(home.pos); controls.target.copy(home.target);
+  // Phones: the panel is a sheet along the bottom (upright) or a column down the right (sideways), so the view's
+  // center moves into the space that is left. Desktop keeps the full-window view.
+  function frameStack() {
+    const w = st.host.clientWidth, h = st.host.clientHeight, r = document.getElementById('panel').getBoundingClientRect();
+    if (w > 900 && h > 500) camera.clearViewOffset();
+    else if (r.top > h / 3) camera.setViewOffset(w, h, -0.16 * w, (h - r.top) / 2, w, h);   // right a little: the layer names sit left
+    else camera.setViewOffset(w, h, (w - r.left) / 2 - 0.13 * w, 0, w, h);
+    camera.updateProjectionMatrix();
+  }
+  new ResizeObserver(frameStack).observe(st.host);
+  frameStack();
   controls.minDistance = 30; controls.maxDistance = 600;
   scene.fog.density = 0.0024;
   EX.dust(scene, 1600, 1100);
