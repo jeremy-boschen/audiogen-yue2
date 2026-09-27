@@ -28,6 +28,8 @@
       Press <kbd>P</kbd> for a sped-up replay of how the song was generated.</p>
     <p style="color:var(--muted)">Drag to turn the view, scroll to zoom. Press <kbd>?</kbd> to bring this back.</p>`);
   document.getElementById('runlabel').innerHTML = `<b>${D.run}</b> · audio ${D.seconds.toFixed(0)} s · score ${D.score.seconds.toFixed(0)} s (score time)`;
+  D.audio = EX.hdSwap(D, D.audio);
+  EX.hdToggle(D);
   const $ = (id) => document.getElementById(id);
 
   const TMAX = Math.max(D.seconds, D.score.seconds);

@@ -24,6 +24,8 @@
       Audio is volume-matched for listening and, on the web, compressed; the numbers come from the original audio.</p>
     `);
   document.getElementById('runlabel').innerHTML = `<b>${D.run}</b> · ${D.seconds.toFixed(0)} s · ${D.steps} steps`;
+  if (EX.hdOn(D)) { D.audio = EX.hdSwap(D, D.audio); D.audio_bytes = D.hd.bytes; }
+  EX.hdToggle(D);
 
   const C = D.columns, B = D.bands, S = D.steps, NS = S + 1;
   const W = 150, DEPTH = 78, H = 17;      // deep enough that the Hz bands spread out

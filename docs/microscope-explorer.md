@@ -186,8 +186,17 @@ Run all commands from `~/dev/projects/audiogen-yue2`.
 3. It builds focus and stack data. Your own marks are stripped and the annotate endpoint is
    switched off, so a visitor's marks stay in their browser. The page is labeled with `--title` and
    `--take`, which are required for any run other than `DEFAULT_RUN` (labeled "Slow Down, take 2").
-4. It converts every audio file the data refers to into AAC 160k `.m4a` and rewrites each path to
-   `<media-base>/<name>`. Encoder and bitrate come from `--aac-encoder` and `--aac-bitrate`. The name hashes the source bytes, the encoder settings (`aac_args`) and the
+4. It converts every audio file the data refers to into `.m4a` twice, and rewrites each path to
+   `<media-base>/<name>`:
+   - **standard** (the default the pages load): Apple's AAC encoder (`aac_at`) at 64k, set by
+     `--aac-encoder` and `--aac-bitrate`;
+   - **HD**: `aac_at` at 160k, set by `--hd-encoder` and `--hd-bitrate`. The data carries `hd.map`
+     (standard URL → HD URL). The "HD audio" button in the top bar stores the choice in localStorage
+     (`microscope-hd`) and reloads, and both pages swap their URLs through the map.
+
+   64k was chosen by ear against 160k on 2026-09-27 (State at early steps and the finished chorus):
+   the difference was slight. `aac_at` is macOS only, so publish runs on the Mac.
+    The name hashes the source bytes, the encoder settings (`aac_args`) and the
    ffmpeg version (`media/<sha256[:16]>.m4a`), so any change that could change the output gives a new
    name, and the files can be cached forever.
 5. It rewrites the index for the web (`_swap`) with an intro, an About panel and two columns.
@@ -208,8 +217,8 @@ cd RUNS/00_publish && python3 -m http.server 8000     # http://127.0.0.1:8000/
 Publish deletes and recreates the folder. A server started from inside it, as above, keeps serving
 the deleted folder, so restart it after every publish.
 
-As of 2026-09-27, the build is 129.5 MB (decimal): 125.2 MB of audio in 66 files in `media/`, and
-4.4 MB of pages and data. The focus page downloads 123.2 MB of that before it plays.
+As of 2026-09-27, `media/` holds 132 files (66 standard, 66 HD), 174 MB (decimal). The focus page
+downloads 49.5 MB before it plays (122 MB in HD).
 
 ## Publishing to www.newty.coffee
 
@@ -218,7 +227,7 @@ allows 1 GB): it keeps 125 MB of binaries out of the site repo and serves them f
 
 1. **Build for the web:**
    `.venv/bin/python bin/explore.py publish --media-base https://media.newty.coffee/yue2-microscope`
-2. **Upload the audio to R2:** every file in `00_publish/media/` goes to bucket `newty-media`,
+2. **Upload the audio to R2:** every file in `00_publish/media/`, standard and HD, goes to bucket `newty-media`,
    under `yue2-microscope/`, with a long cache lifetime (the names are content hashes). For
    example:
    `npx wrangler r2 object put newty-media/yue2-microscope/<file> --file <path> --remote --cache-control "public, max-age=31536000, immutable"`

@@ -163,13 +163,22 @@ def cmd_publish(args):
     focus["annotate"] = None                          # nothing to write to on the web: a visitor's marks stay in their browser
     focus["listening"] = {**focus["listening"], "state": {}, "predicted": {}}   # visitors start from the machines' marks
     focus["run"] = stack["run"] = label
+    # Every file twice: standard (small, the default) and HD, which the pages' "HD audio" switch swaps in.
     done: dict = {}
-    enc = aac_args(args.aac_encoder, args.aac_bitrate)
+    done_hd: dict = {}
+    enc, enc_hd = aac_args(args.aac_encoder, args.aac_bitrate), aac_args(args.hd_encoder, args.hd_bitrate)
+    _publish_audio(focus, out, args.media_base, done_hd, enc_hd)
+    _publish_audio(stack, out, args.media_base, done_hd, enc_hd)
     focus = _publish_audio(focus, out, args.media_base, done, enc)
     stack = _publish_audio(stack, out, args.media_base, done, enc)
-    # The page downloads all of it before playing; the total lets its progress bar count bytes.
-    focus_files = {u.rsplit("/", 1)[-1] for u in [focus["audio"]["finished"], *focus["audio"]["state"], *focus["audio"]["predicted"]]}
-    focus["audio_bytes"] = sum((out / "media" / n).stat().st_size for n in focus_files)
+    size = lambda names: sum((out / "media" / n).stat().st_size for n in names)   # noqa: E731
+    focus_src = [k for k in done if f"{args.media_base}/{done[k]}" in
+                 {focus["audio"]["finished"], *focus["audio"]["state"], *focus["audio"]["predicted"]}]
+    # The page downloads all of it before playing; the totals let its progress bar count bytes.
+    focus["audio_bytes"] = size({done[k] for k in focus_src})
+    hd = {"map": {f"{args.media_base}/{done[k]}": f"{args.media_base}/{done_hd[k]}" for k in done},
+          "bytes": size({done_hd[k] for k in focus_src}), "rate": args.hd_bitrate, "standard_rate": args.aac_bitrate}
+    focus["hd"] = stack["hd"] = hd
     explore.write_data(out, "focus", "FOCUS", focus)
     explore.write_data(out, "stack", "STACK", stack)
     explore.write_data(out, "summary", "SUMMARY", {
@@ -198,7 +207,7 @@ def cmd_publish(args):
     start = text.index("  document.getElementById('build').innerHTML")
     end = text.index("`;\n", start) + len("`;\n")
     index.write_text(text[:start] + text[end:])
-    manifest = sorted({name for name in done.values()})
+    manifest = sorted({*done.values(), *done_hd.values()})
     (out / "media-manifest.json").write_text(json.dumps(
         {"base": args.media_base, "files": manifest,
          "bytes": sum((out / "media" / n).stat().st_size for n in manifest)}, indent=1) + "\n")
@@ -278,8 +287,10 @@ def main():
     publish.add_argument("run", nargs="?", default=str(DEFAULT_RUN))
     publish.add_argument("--title", help="the song's name; required unless publishing the default run")
     publish.add_argument("--take", type=int)
-    publish.add_argument("--aac-encoder", default="aac", choices=["aac", "aac_at"])
-    publish.add_argument("--aac-bitrate", default="160k")
+    publish.add_argument("--aac-encoder", default="aac_at", choices=["aac", "aac_at"], help="standard audio (the default)")
+    publish.add_argument("--aac-bitrate", default="64k")
+    publish.add_argument("--hd-encoder", default="aac_at", choices=["aac", "aac_at"], help="HD audio (the switch)")
+    publish.add_argument("--hd-bitrate", default="160k")
     publish.add_argument("--media-base", default="media",
                          help="where the audio will be served from: 'media' (beside the pages) or a URL")
     publish.add_argument("--home", default="https://www.newty.coffee/")

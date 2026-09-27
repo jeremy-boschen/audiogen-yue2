@@ -313,5 +313,21 @@
     gcard.classList.add('on');
   });
 
-  window.EX = { g, GLOSSARY, T, reduced, DPR, PALETTE, GLSL_RAMP, rampJS, css, decode, fmt, num, stage, labels, dust, floor, nav, tip, spark, help };
+  // Web build: standard audio by default; "HD audio" in the top bar swaps every file for its HD copy (publish writes
+  // the map), remembered across pages. The swap needs a reload, because the focus page downloads everything first.
+  const HD_KEY = 'microscope-hd';
+  const hdOn = (D) => { try { return !!D.hd && localStorage.getItem(HD_KEY) === '1'; } catch (e) { return false; } };
+  const hdSwap = (D, v) => (!hdOn(D) ? v : typeof v === 'string' ? D.hd.map[v] || v
+    : Array.isArray(v) ? v.map((x) => hdSwap(D, x)) : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, hdSwap(D, x)])) : v);
+  function hdToggle(D) {
+    if (!D.hd) return;
+    const run = document.getElementById('runlabel'), on = hdOn(D);
+    const b = document.createElement('button');
+    b.className = `hdtoggle${on ? ' on' : ''}`; b.textContent = 'HD audio';
+    b.title = on ? `Playing HD audio (${D.hd.rate}). Click for standard (${D.hd.standard_rate}), a smaller download. Reloads the page.`
+      : `Switch to HD audio (${D.hd.rate}), a bigger download. Reloads the page.`;
+    b.onclick = () => { try { localStorage.setItem(HD_KEY, on ? '0' : '1'); } catch (e) { /* private mode */ } location.reload(); };
+    run.appendChild(b);
+  }
+  window.EX = { hdOn, hdSwap, hdToggle, g, GLOSSARY, T, reduced, DPR, PALETTE, GLSL_RAMP, rampJS, css, decode, fmt, num, stage, labels, dust, floor, nav, tip, spark, help };
 })();
