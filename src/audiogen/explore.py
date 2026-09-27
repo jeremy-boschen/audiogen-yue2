@@ -107,7 +107,7 @@ def js_global(name: str, value) -> str:
 
 
 def normalized(vectors: np.ndarray) -> np.ndarray:
-    """Centre each row and scale it to unit length (so dot products are correlations)."""
+    """Center each row and scale it to unit length (so dot products are correlations)."""
     v = np.asarray(vectors, dtype=np.float64)
     v = v - v.mean(axis=1, keepdims=True)
     norms = np.linalg.norm(v, axis=1, keepdims=True)
@@ -133,7 +133,7 @@ def classical_mds(distances: np.ndarray, dims: int = 3) -> np.ndarray:
 def project_takes(features: np.ndarray, power: float = 0.3) -> tuple[np.ndarray, np.ndarray]:
     """3-D positions and the correlation matrix for a stack of take feature vectors.
 
-    Distance is sqrt(2(1 - r)) on centred, unit-length features (r = envelope
+    Distance is sqrt(2(1 - r)) on centered, unit-length features (r = envelope
     correlation), raised to `power` so near-duplicates (noise seeds, long ODE
     solves) do not collapse onto one point. Axes carry no meaning.
     """
@@ -365,7 +365,7 @@ def focus_data(run: Path, out: Path, cache: Path | None = None) -> dict:
         "audio": {"state": [rel(p, out) for p in listening],
                   "predicted": [rel(p, out) for p in pred_listening],
                   "finished": rel(listening[-1], out)},
-        "audio_note": "peak-normalised listening copies (-1 dBFS); 'finished' is step 32, which is the take",
+        "audio_note": "peak-normalized listening copies (-1 dBFS); 'finished' is step 32, which is the take",
         "listening": listening_marks(run),
         # Where the local server writes marks (bin/explore.py serve); publish clears it.
         "annotate": rel(run, out) if (run / "analysis/annotations.json").exists() else None,

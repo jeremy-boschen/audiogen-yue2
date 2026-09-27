@@ -23,12 +23,12 @@
       <dt>Resolve</dt><dd>Plays the whole process for you: step 0 to 32, with the sound following.</dd>
       <dt>State · Predicted final · Finished</dt><dd><b>State</b> is the song exactly as it is at this step: still partly
         noise until the last few steps. <b>Predicted final</b> is where the model thinks it is heading from here, often
-        recognisable surprisingly early. <b>Finished</b> is the end result.</dd>
+        recognizable surprisingly early. <b>Finished</b> is the end result.</dd>
       <dt>Ghost overlay</dt><dd>A see-through copy of the other view floating above: in State, where it is heading; in
         Predicted final, where it actually is. The gap is how far it still has to go.</dd>
       <dt>Dots on the dial</dt><dd>Where a listener first heard something: the beat, a voice, the words. They come
         from someone listening, not from a measurement. Click a row below the dial to jump there.</dd>
-      <dt>Settling colour</dt><dd>Colour means that part of the sound already matches the finished song; cold blue means it
+      <dt>Settling color</dt><dd>Color means that part of the sound already matches the finished song; gray and glittering means it
         is still forming. The low end and the beat tend to lock in first, fine detail last.</dd>
     </dl>
     <p style="color:var(--muted)">Drag to turn the view, scroll to zoom, click the land to jump to that moment. Press
@@ -40,7 +40,7 @@
   const state = decode(D.state, Uint8Array), pred = decode(D.predicted, Uint8Array);
   const settleS = decode(D.settle_state, Uint8Array), settleP = decode(D.settle_predicted, Uint8Array);
 
-  // Band depth positions from log-centre frequency: low at the front.
+  // Band depth positions from log-center frequency: low at the front.
   const lf = (f) => Math.log(f / 40) / Math.log(16000 / 40);
   const bandZ = D.band_lo_hz.map((lo, b) => (0.5 - lf(Math.sqrt(lo * D.band_hi_hz[b]))) * DEPTH);
   const zOfHz = (f) => (0.5 - lf(f)) * DEPTH;
@@ -115,7 +115,7 @@
     float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
     vec3 shade(bool lines) {
       vec3 base = ramp(0.05 + pow(vH, 1.15) * 0.95);
-      float settled = mix(1.0, smoothstep(0.35, 0.95, vSettle), uSettleOn);
+      float settled = mix(1.0, smoothstep(0.6, 0.98, vSettle), uSettleOn);   // most bands pass 0.6 by step 12: the ramp starts there so step 16-24 still shows what is forming
       float lum = dot(base, vec3(0.3, 0.5, 0.2));
       vec3 cool = vec3(lum) * vec3(0.55, 0.66, 1.05) * 0.85;
       float glit = step(0.985, hash(floor(vW.xz * 2.2) + floor(uTime * 9.0))) * (1.0 - settled) * 0.9;

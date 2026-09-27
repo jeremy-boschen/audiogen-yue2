@@ -167,7 +167,7 @@ def cmd_publish(args):
     start = index.read_text().index('    <a class="card" href="map.html">')
     end = index.read_text().index("</a>", start) + len("</a>\n")
     index.write_text(index.read_text()[:start] + index.read_text()[end:])
-    _swap(index, ".grid { display: grid; grid-template-columns: repeat(3, 1fr);", ".grid { display: grid; grid-template-columns: repeat(2, 1fr);")
+    _swap(index, ":root { --cols: 3; }", ":root { --cols: 2; }")
     _swap(index, '<div class="panel"><h3>Build</h3><ul id="build"></ul></div>',
           f'<div class="panel"><h3>About</h3><ul><li>An exploration of how YuE2 generates songs. {args.about}</li>'
           f'<li>YuE2 is made by <a href="https://huggingface.co/m-a-p">m-a-p</a>; this is not their project. It was run and '

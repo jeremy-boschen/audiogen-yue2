@@ -19,7 +19,7 @@
       <dt>Audio</dt><dd>What you hear, made from the latent by a decoder.</dd>
     </dl>
     <p>Each phrase shows its line from the lyrics when the plan's phrases and the lyric lines match one for one. Under
-      it, <span class="heardtag">heard</span> is what a speech recogniser picked out of the finished song at that
+      it, <span class="heardtag">heard</span> is what a speech recognizer picked out of the finished song at that
       point: what actually came out, which can differ from the lyrics. It can also mishear.</p>
     `, `
     <h3 style="margin-top:0">What to do</h3>
@@ -110,7 +110,7 @@
     scene.add(wave); develop.wave = wave;
   }
 
-  // --- latent: displaced sheet, diverging colour --------------------------------------------
+  // --- latent: displaced sheet, diverging color --------------------------------------------
   const LF = D.latent.frames, LC = D.latent.channels;
   const latTex = new T.DataTexture(decode(D.latent.values, Uint8Array), LF, LC, T.RedFormat, T.UnsignedByteType);
   latTex.minFilter = T.LinearFilter; latTex.magFilter = T.LinearFilter; latTex.unpackAlignment = 1; latTex.needsUpdate = true;
@@ -162,7 +162,7 @@
     scene.add(semMesh);
   }
 
-  // --- score: notes of both voices as bars, sections as coloured floors -----------------------------
+  // --- score: notes of both voices as bars, sections as colored floors -----------------------------
   const voiceNames = Object.keys(D.score.voices);
   const allPitch = voiceNames.flatMap((v) => D.score.voices[v].pitch);
   const pMin = Math.min(...allPitch), pMax = Math.max(...allPitch);
