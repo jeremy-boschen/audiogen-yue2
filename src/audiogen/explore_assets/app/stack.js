@@ -18,6 +18,9 @@
         you watch come out of noise on the <a href="focus.html">Coming into focus</a> page.</dd>
       <dt>Audio</dt><dd>What you hear, made from the latent by a decoder.</dd>
     </dl>
+    <p>Each phrase shows its line from the lyrics when the plan's phrases and the lyric lines match one for one. Under
+      it, <span class="heardtag">heard</span> is what a speech recogniser picked out of the finished song at that
+      point: what actually came out, which can differ from the lyrics. It can also mishear.</p>
     `, `
     <h3 style="margin-top:0">What to do</h3>
     <p>Hover anywhere to light the same moment through all four floors and read its lyric. Click to hear that phrase.
@@ -238,18 +241,23 @@
   spanMesh.rotation.x = -Math.PI / 2; spanMesh.visible = false; scene.add(spanMesh);
 
   // --- phrases, moment card, audio --------------------------------------------------------------------
+  const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const words = (t) => String(t || '').toLowerCase().replace(/[^a-z' ]+/g, ' ').trim().split(/\s+/).join(' ');
+  const asWritten = (p) => p.lyrics && words(p.lyrics) === words(p.heard);
   const phrases = D.phrases.map((p, i) => ({ ...p, i }));
   const secOf = (t) => D.score.sections.find((s) => t >= s.start && t < s.end);
   const phraseAt = (t) => phrases.find((p) => t >= p.start && t < p.start + (p.seconds || 0));
   $('phrasecount').textContent = `${phrases.length} · score time`;
   $('phrases').innerHTML = phrases.map((p) => `<div class="item" data-i="${p.i}">
       <span class="dot" style="background:${css(rampJS(0.45 + (p.notes_per_syllable ? Math.min(1, (p.notes_per_syllable - 0.6) / 1.2) : 0) * 0.55))}"></span>
-      <span class="t"><span class="lyric ${p.lyrics ? '' : 'none'}">${p.lyrics || 'no lyric line paired'}</span>
+      <span class="t">${p.lyrics ? `<span class="lyric">${p.lyrics}</span>` : p.heard ? '' : `<span class="lyric none">${D.heard ? 'no words heard' : 'no lyric line paired'}</span>`}
+        ${p.heard ? `<span class="heard ${p.lyrics ? '' : 'alone'}"><span class="heardtag">heard</span> ${asWritten(p) ? 'as written' : esc(p.heard)}</span>` : ''}
         <small>${p.section} · phrase ${p.number} · ${fmt(p.start)}${p.start >= D.seconds ? ' · past the end of the audio' : ''}</small></span>
       <span class="n">${p.notes_per_syllable != null ? p.notes_per_syllable.toFixed(2) + ' n/s' : '–'}</span></div>`).join('');
   const items = [...document.querySelectorAll('#phrases .item')];
   items.forEach((el) => (el.onclick = () => playPhrase(phrases[+el.dataset.i])));
   const notes = [];
+  if (D.heard) notes.push(`Heard words: ${esc(D.heard.source)}. Each phrase gets the words heard from its start until the next phrase starts.`);
   if (D.score.pitch_note) notes.push(D.score.pitch_note);
   if (D.score.seconds > D.seconds) notes.push(`The score runs ${D.score.seconds.toFixed(1)} s in score time; the render is ${D.seconds.toFixed(0)} s, so the last ${(D.score.seconds - D.seconds).toFixed(0)} s of the plan were never sung.`);
   notes.push(`Song-level notes/syllable ${num(D.song.notes_per_syllable, 3)} (${D.song.melody_notes} notes, ~${D.song.syllables} syllables).`);
@@ -305,6 +313,7 @@
     $('moment').innerHTML = `
       <div class="m-chips">${s ? `<span class="chip">${s.label}</span>` : ''} ${p && p.bin ? `<span class="chip">${p.notes_per_syllable.toFixed(2)} notes/syllable · ${p.bin}</span>` : ''}</div>
       <div class="m-lyric lyric ${p && p.lyrics ? '' : 'none'}">${p ? p.lyrics || 'no lyric line paired with this phrase' : 'no sung phrase here in the score'}</div>
+      ${D.heard ? `<div class="m-line heard"><span class="heardtag">heard</span> ${p && p.heard ? esc(p.heard) : '<span style="color:var(--faint)">nothing</span>'}</div>` : ''}
       <div class="m-line note">${p ? `phrase ${p.number} of the ${p.section}: ${p.melody_notes} notes, ~${p.syllables} syllables, ${num(p.seconds, 1)} s` : ''}</div>
       <div class="m-line note" style="margin-top:6px">semantic: ${tok}</div>
       <div class="m-line note">latent: ${frame < LF ? `frame ${frame} of ${LF}` : 'past the end'} · audio: ${t < D.seconds ? fmt(t) : 'ended at ' + fmt(D.seconds)}</div>`;
@@ -337,7 +346,7 @@
     const ph = phraseAt(p.t), s = secOf(p.t);
     showMoment(p.t);
     tip.show(`<b>${fmt(p.t)}</b> <span class="m">score time · on the ${p.layer} layer</span><br>
-      ${s ? s.label : ''}${ph ? ` · phrase ${ph.number}` : ''}${ph && ph.lyrics ? `<div class="lyr">${ph.lyrics}</div>` : ''}
+      ${s ? s.label : ''}${ph ? ` · phrase ${ph.number}` : ''}${ph && ph.lyrics ? `<div class="lyr">${ph.lyrics}</div>` : ''}${ph && ph.heard ? `<div class="m">heard: ${esc(ph.heard)}</div>` : ''}
       <span class="m">click to ${p.t < D.seconds ? 'play' : 'select'}${ph ? ' this phrase' : ' from here'}</span>`, e.clientX, e.clientY);
   });
   st.canvas.addEventListener('pointerleave', () => tip.hide());

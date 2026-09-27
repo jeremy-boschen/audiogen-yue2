@@ -148,3 +148,20 @@ def test_envelope_grid_shape(tmp_path):
     assert grid.shape == (10, len(keep))
     loudest = keep[grid.max(axis=0).argmax()]
     assert loudest == int(np.argmax(np.array(explore.band_edges(16)) > 440)) - 1
+
+
+# --- the stack's phrase list: pickups folded into the phrase they lead into ---
+
+def pickup_phrase(section, start, seconds):
+    return {"section_index": section, "start": start, "seconds": seconds}
+
+
+def test_a_note_ending_a_section_that_runs_into_the_next_is_its_pickup():
+    # Slow Down take 2: the chorus's last "phrase" is one 0.17 s note, the verse's "My"
+    out = explore.fold_pickups([pickup_phrase(1, 42.95, 1.36), pickup_phrase(1, 46.19, 0.17), pickup_phrase(2, 46.36, 5.45)])
+    assert [(p["start"], p["seconds"], p.get("pickup")) for p in out] == [(42.95, 1.36, None), (46.19, 5.62, True)]
+
+
+def test_a_short_phrase_inside_a_section_or_before_a_rest_stays():
+    kept = [pickup_phrase(1, 10.0, 0.5), pickup_phrase(1, 10.5, 2.0), pickup_phrase(1, 13.0, 0.4), pickup_phrase(2, 14.0, 2.0)]
+    assert explore.fold_pickups(kept) == kept

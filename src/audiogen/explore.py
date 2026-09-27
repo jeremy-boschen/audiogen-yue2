@@ -397,6 +397,32 @@ def listening_marks(run: Path) -> dict:
     return {"fields": [[f, LISTENING_LABELS.get(f, f)] for f in scope.LISTENING], **marks}
 
 
+LEAD = 0.3
+PICKUP_SECONDS = 1.0
+
+
+def fold_pickups(phrases: list[dict]) -> list[dict]:
+    """A short phrase ending a section that runs straight into the next is that next phrase's pickup.
+
+    The score writes the first word of a verse ("My" mother...) as a note at the end of the
+    chorus before it; rest-gap phrasing makes that note a phrase of its own. It is folded into
+    the phrase it leads into, which then starts on it. The note counts are the score's, left as
+    they were.
+    """
+    phrases = sorted(phrases, key=lambda p: p["start"])
+    out = []
+    for i, phrase in enumerate(phrases):
+        nxt = phrases[i + 1] if i + 1 < len(phrases) else None
+        seconds = phrase.get("seconds") or 0
+        if (nxt and seconds <= PICKUP_SECONDS and nxt["section_index"] != phrase["section_index"]
+                and nxt["start"] - (phrase["start"] + seconds) < 0.05):
+            nxt["seconds"] = round((nxt.get("seconds") or 0) + nxt["start"] - phrase["start"], 2)
+            nxt["start"], nxt["pickup"] = phrase["start"], True
+            continue
+        out.append(phrase)
+    return out
+
+
 def stack_data(run: Path, out: Path, cache: Path | None = None) -> dict:
     """Score, semantic tokens, acoustic latent and audio of one take, on one time axis."""
     run = Path(run)
@@ -413,6 +439,15 @@ def stack_data(run: Path, out: Path, cache: Path | None = None) -> dict:
                             "seconds": phrase.get("seconds"), "lyrics": phrase.get("lyrics"),
                             "syllables": phrase.get("syllables"), "melody_notes": phrase.get("melody_notes"),
                             "notes_per_syllable": phrase.get("notes_per_syllable"), "bin": phrase.get("bin")})
+    phrases = fold_pickups(phrases)
+    heard = read_json(run / "analysis/heard.json")
+    if heard:
+        # Each phrase gets the words heard from its start until the next phrase starts. A word that
+        # starts up to LEAD seconds before a phrase belongs to it: singers land a little ahead of the score.
+        bounds = [p["start"] for p in phrases[1:]] + [float("inf")]
+        for i, (phrase, end) in enumerate(zip(phrases, bounds)):
+            lo = phrase["start"] if i else float("-inf")
+            phrase["heard"] = " ".join(w["word"] for w in heard["words"] if lo <= w["start"] + LEAD < end) or None
     tokens = np.load(run / "take/semantic.npy").ravel().astype(np.int64)
     latent = np.load(run / "final/latent.npy") if (run / "final/latent.npy").exists() else np.load(run / "take/latent.npy")
     latent = latent.reshape(-1, latent.shape[-1])
@@ -450,6 +485,7 @@ def stack_data(run: Path, out: Path, cache: Path | None = None) -> dict:
                         "values": b64(quantize(spectrogram.T, s_lo, s_hi))},
         "waveform": b64(waveform_peaks(audio_path)),
         "plan": reveal, "semantic_checkpoints": sem_marks,
+        "heard": {"source": heard["source"]} if heard else None,
         "audio": rel(audio_path, out),
     }
 

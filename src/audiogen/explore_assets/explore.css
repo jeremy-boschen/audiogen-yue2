@@ -178,6 +178,12 @@ input[type=range] { width: 100%; accent-color: var(--pink); }
 .list .n { font: 600 11px ui-monospace, monospace; color: var(--muted); }
 .lyric { font: 14px/1.35 var(--serif); color: #f1e9ff; }
 .lyric.none { color: var(--faint); font-style: italic; font-size: 12px; font-family: -apple-system, sans-serif; }
+/* words a recogniser heard in the finished take: never styled as the lyrics */
+.heard { display: block; color: var(--muted); font-size: 11.5px; line-height: 1.35; margin-top: 2px; }
+.heard.alone { color: #d9cdf2; font-size: 12.5px; margin-top: 0; }
+.heardtag { display: inline-block; padding: 0 5px; margin-right: 3px; border-radius: 4px; font: 600 9px/14px -apple-system, sans-serif;
+            letter-spacing: .06em; text-transform: uppercase; color: #a8e6ff; background: rgba(90, 200, 255, .12);
+            border: 1px solid rgba(90, 200, 255, .3); vertical-align: 1px; }
 .chip { display: inline-block; padding: 1px 7px; border-radius: 999px; font-size: 10px; font-weight: 600; letter-spacing: .04em;
         background: rgba(155, 107, 255, .16); color: #d9ccff; border: 1px solid rgba(155, 107, 255, .35); }
 .chip.warn { background: rgba(255, 154, 77, .12); color: #ffd0a8; border-color: rgba(255, 154, 77, .4); }
