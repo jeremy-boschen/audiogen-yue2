@@ -227,13 +227,14 @@ allows 1 GB): it keeps 125 MB of binaries out of the site repo and serves them f
 
 1. **Build for the web:**
    `.venv/bin/python bin/explore.py publish --media-base https://media.newty.coffee/yue2-microscope`
-2. **Upload the audio to R2:** every file in `00_publish/media/`, standard and HD, goes to bucket `newty-media`,
+2. **Upload the audio to R2** (run wrangler from outside `00_publish/`: it leaves a `.wrangler/` cache,
+   with the account ID and name, in the folder it runs from): every file in `00_publish/media/`, standard and HD, goes to bucket `newty-media`,
    under `yue2-microscope/`, with a long cache lifetime (the names are content hashes). For
    example:
    `npx wrangler r2 object put newty-media/yue2-microscope/<file> --file <path> --remote --cache-control "public, max-age=31536000, immutable"`
    CORS on the bucket was set to allow `https://www.newty.coffee` (the apex domain redirects to
    www); check it again before the first upload.
-3. **Pages to GitHub:** copy everything in `00_publish/` except `media/` into repo
+3. **Pages to GitHub:** copy everything in `00_publish/` except `media/` and dot-folders into repo
    `newty-coffee/www` under `yue2-microscope/`, then commit and push to `main`. GitHub Pages
    serves it at `https://www.newty.coffee/yue2-microscope/`.
 4. **Check the live site** in Chromium and WebKit with playwright (from
