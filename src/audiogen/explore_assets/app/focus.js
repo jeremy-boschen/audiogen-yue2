@@ -113,7 +113,7 @@
     uniform float uStep, uSteps, uMix, uFin, uH, uLift, uGhostMix;
     uniform vec2 uTexel;
     attribute vec2 aUV;
-    varying float vH; varying float vSettle; varying vec3 vN; varying vec3 vW; varying float vDist;
+    varying float vH; varying float vFinH; varying float vSettle; varying vec3 vN; varying vec3 vW; varying float vDist;
     float lvl(sampler2DArray t, vec2 uv, float s0, float s1, float f) {
       return mix(texture(t, vec3(uv, s0)).r, texture(t, vec3(uv, s1)).r, f);
     }
@@ -132,6 +132,7 @@
       float hz = shape(hAt(aUV + vec2(0.0, uTexel.y), mixv)) - shape(hAt(aUV - vec2(0.0, uTexel.y), mixv));
       vN = normalize(vec3(-hx * 2.0, 1.6, hz * 0.9));
       vH = lev(h);
+      vFinH = lev(texture(uState, vec3(aUV, uSteps)).r);   // the height here in the finished song
       float sv = (uStep + 0.5) / (uSteps + 1.0);
       vSettle = mix(mix(texture(uSetS, vec2(aUV.y, sv)).r, texture(uSetP, vec2(aUV.y, sv)).r, mixv), 1.0, uFin);
       vec3 p = position; p.y = shape(h) + uLift;
@@ -141,16 +142,19 @@
     }`;
   const FRAG_COMMON = `
     uniform float uTime, uPlayX, uSettleOn, uHoverZ, uAlpha; uniform vec3 uBg;
-    varying float vH; varying float vSettle; varying vec3 vN; varying vec3 vW; varying float vDist;
+    varying float vH; varying float vFinH; varying float vSettle; varying vec3 vN; varying vec3 vW; varying float vDist;
     ${EX.GLSL_RAMP}
     float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
     vec3 shade(bool lines) {
       vec3 base = ramp(0.05 + pow(vH, 1.15) * 0.95);
-      float settled = mix(1.0, smoothstep(0.6, 0.98, vSettle), uSettleOn);   // most bands pass 0.6 by step 12: the ramp starts there so step 16-24 still shows what is forming
+      // Settling color: each spot takes on the color it has in the finished song, blending in gradually as its
+      // band settles, so the gray warms toward the final picture step by step instead of snapping at the end.
+      float settled = mix(1.0, smoothstep(0.3, 0.98, vSettle), uSettleOn);
+      vec3 toward = ramp(0.05 + pow(vFinH, 1.15) * 0.95);
       float lum = dot(base, vec3(0.3, 0.5, 0.2));
       vec3 cool = vec3(lum) * vec3(0.55, 0.66, 1.05) * 0.85;
       float glit = step(0.985, hash(floor(vW.xz * 2.2) + floor(uTime * 9.0))) * (1.0 - settled) * 0.9;
-      vec3 col = mix(cool, base, settled) + glit * vec3(0.7, 0.8, 1.0);
+      vec3 col = mix(cool, mix(toward, base, settled * settled), settled) + glit * vec3(0.7, 0.8, 1.0);
       if (!lines) {
         vec3 L = normalize(vec3(-0.35, 0.85, 0.45));
         float diff = max(dot(normalize(vN), L), 0.0);
@@ -242,20 +246,20 @@
   // Two bars in front of the land: the arrangement (verse, chorus: from the score, so in score time), and in
   // front of it the time line, where the pins go.
   const ARR_Z = DEPTH / 2 + 4.5, TIME_Z = DEPTH / 2 + 8;
-  const SEC_COLOR = { verse: '#8b6bff', chorus: '#ff9f4a', bridge: '#ff5fb4', intro: '#4f8cff', outro: '#4f8cff' };   // the land's own palette
+  const SEC_RAMP = { verse: [0.02, 0.42], chorus: [0.55, 0.98], bridge: [0.4, 0.7], intro: [0.0, 0.25], outro: [0.0, 0.25] };   // stretches of the land's palette
   const secGroup = new T.Group(); scene.add(secGroup);
   (D.sections || []).forEach((s) => {
     if (s.start >= D.seconds) return;
     const x0 = xOfSec(s.start), x1 = xOfSec(Math.min(s.end, D.seconds));
-    const m = new T.Mesh(new T.PlaneGeometry(Math.max(0.1, x1 - x0 - 0.5), 1.5),
-      new T.MeshBasicMaterial({ color: new T.Color(SEC_COLOR[s.label] || '#9aa6c4').multiplyScalar(1.25), transparent: true, opacity: 0.8, toneMapped: false }));
+    const [r0, r1] = SEC_RAMP[s.label] || [0.3, 0.6], len = Math.max(0.1, x1 - x0 - 0.5);
+    const g = new T.PlaneGeometry(len, 1.5, 24, 1), gp = g.getAttribute('position'), gc = [];
+    for (let i = 0; i < gp.count; i++) { const c = rampJS(r0 + (r1 - r0) * (gp.getX(i) / len + 0.5)); gc.push(c[0] * 1.2, c[1] * 1.2, c[2] * 1.2); }
+    g.setAttribute('color', new T.Float32BufferAttribute(gc, 3));
+    const m = new T.Mesh(g, new T.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.85, toneMapped: false }));
     m.rotation.x = -Math.PI / 2; m.position.set((x0 + x1) / 2, 0.02, ARR_Z);
     secGroup.add(m);
   });
-  const timeGeo = new T.PlaneGeometry(W, 1.6, 64, 1), tpos = timeGeo.getAttribute('position'), tcol = [];
-  for (let i = 0; i < tpos.count; i++) { const c = rampJS(0.12 + 0.8 * (tpos.getX(i) / W + 0.5)); tcol.push(c[0] * 0.95, c[1] * 0.95, c[2] * 0.95); }
-  timeGeo.setAttribute('color', new T.Float32BufferAttribute(tcol, 3));    // the time line in the land's colors, start to end
-  const timeBar = new T.Mesh(timeGeo, new T.MeshBasicMaterial({ vertexColors: true, toneMapped: false }));
+  const timeBar = new T.Mesh(new T.PlaneGeometry(W, 1.6), new T.MeshBasicMaterial({ color: '#cdbfff', toneMapped: false }));
   timeBar.rotation.x = -Math.PI / 2; timeBar.position.set(0, 0.02, TIME_Z); scene.add(timeBar);
   for (let t = 0; t <= D.seconds + 0.01; t += 10) {
     const tick = new T.Mesh(new T.PlaneGeometry(0.45, t % 20 ? 2.2 : 3.4), new T.MeshBasicMaterial({ color: '#f4efff', toneMapped: false }));
