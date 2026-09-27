@@ -145,16 +145,17 @@
     varying float vH; varying float vFinH; varying float vSettle; varying vec3 vN; varying vec3 vW; varying float vDist;
     ${EX.GLSL_RAMP}
     float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+    const vec3 FROST = vec3(0.30, 0.80, 0.90);
     vec3 shade(bool lines) {
       vec3 base = ramp(0.05 + pow(vH, 1.15) * 0.95);
-      // Settling color: each spot takes on the color it has in the finished song, blending in gradually as its
-      // band settles, so the gray warms toward the final picture step by step instead of snapping at the end.
-      float settled = mix(1.0, smoothstep(0.3, 0.98, vSettle), uSettleOn);
+      // Settling color: what is still forming is frost, a cool teal set against the land's warm palette; each spot
+      // takes on its color in the finished song, gently, as its band settles.
+      float settled = mix(1.0, smoothstep(0.45, 0.99, vSettle), uSettleOn);
       vec3 toward = ramp(0.05 + pow(vFinH, 1.15) * 0.95);
       float lum = dot(base, vec3(0.3, 0.5, 0.2));
-      vec3 cool = vec3(lum) * vec3(0.55, 0.66, 1.05) * 0.85;
+      vec3 cool = FROST * (0.3 + lum * 1.05);
       float glit = step(0.985, hash(floor(vW.xz * 2.2) + floor(uTime * 9.0))) * (1.0 - settled) * 0.9;
-      vec3 col = mix(cool, mix(toward, base, settled * settled), settled) + glit * vec3(0.7, 0.8, 1.0);
+      vec3 col = mix(cool, mix(toward, base, settled * settled), pow(settled, 1.6)) + glit * mix(FROST, vec3(1.0), 0.5);
       if (!lines) {
         vec3 L = normalize(vec3(-0.35, 0.85, 0.45));
         float diff = max(dot(normalize(vN), L), 0.0);
