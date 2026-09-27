@@ -9,7 +9,7 @@
   html, body { overflow: visible; height: auto; min-height: 100%; }   /* the document scrolls, not a box inside it */
   body { background: radial-gradient(90% 70% at 70% 0%, #1c1740 0%, #0a0f1c 60%) fixed, #0a0f1c; min-height: 100%; }
   .wrap { max-width: 1320px; margin: 0 auto; padding: 96px 32px 60px; }
-  .intro h1 { font: 600 64px/1 var(--serif); margin: 10px 0 14px; letter-spacing: -.02em;
+  .intro h1 { font: 600 64px/1 var(--serif); margin: 10px 0 calc(14px - .2em); padding-bottom: .2em; letter-spacing: -.02em;
               background: linear-gradient(90deg, #fff, #e4dcff 40%, #ffc2e3 75%, #ffd0a8); -webkit-background-clip: text; background-clip: text; color: transparent; }
   .intro p { color: #c3cbe0; font-size: 16px; line-height: 1.5; max-width: 760px; margin: 0; }
   :root { --cols: 3; }            /* the cards and the panels below share one set of columns */

@@ -57,7 +57,9 @@ kbd { font: 600 10.5px -apple-system, sans-serif; border: 1px solid var(--line);
 /* hero title over the scene */
 .hero { position: fixed; left: 26px; top: 70px; max-width: 520px; pointer-events: none; z-index: 5; }
 .hero .kicker { font-size: 10px; letter-spacing: .28em; text-transform: uppercase; color: #c9b8ff; }
-.hero h1 { margin: 6px 0 8px; font: 600 44px/1 var(--serif); letter-spacing: -.015em;
+/* gradient text is painted only inside the box: at line-height 1 that box ends above the descenders, so pad
+   it down by .2em (and take the same off the margin) or the g's and y's are cut off */
+.hero h1 { margin: 6px 0 calc(8px - .2em); padding-bottom: .2em; font: 600 44px/1 var(--serif); letter-spacing: -.015em;
            background: linear-gradient(90deg, #fff 0%, #e4dcff 45%, #ffc2e3 80%, #ffd0a8);
            -webkit-background-clip: text; background-clip: text; color: transparent;
            text-shadow: 0 0 40px rgba(155, 107, 255, .25); }
