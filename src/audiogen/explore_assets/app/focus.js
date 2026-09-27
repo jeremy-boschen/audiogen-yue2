@@ -319,8 +319,8 @@
   };
 
   // --- audio: Web Audio, every layer scheduled on one clock -----------------------------
-  // The compressed files are fetched up front (the current step first) and decoded on demand,
-  // a few at a time. Every layer is an AudioBufferSourceNode started at the same context time
+  // The web build downloads every file before anything plays, behind a progress bar, then decodes each when
+  // its step is wanted (a decoded file is ~36 MB, so all 66 at once would hold ~2.3 GB). Every layer is an AudioBufferSourceNode started at the same context time
   // and offset, so a step change is a crossfade between buffers that are already in step: no
   // media elements to keep in lockstep, and gain nodes work where element volume does not (iOS).
   const audio = window.focusAudio = (() => {
@@ -330,16 +330,28 @@
     const files = [D.audio.finished, ...D.audio.state.flatMap((s, i) => [s, D.audio.predicted[i]])];
     const unique = [...new Set(files)];
     const bytes = new Map(), buffers = new Map();
-    let fetched = 0, failed = null;
-    // The web build ships AAC (~2 MB a step), kept after download so any step decodes at once. The
-    // local build points at the runs' WAV listening copies (~35 MB each): fetched when needed and
-    // let go once decoded, never all held at once.
+    let failed = null;
+    // The web build ships AAC (~2 MB a step), all kept after download. The local build points at the runs'
+    // WAV listening copies (~35 MB each): fetched when needed and let go once decoded, never all held at once.
     const compressed = unique.every((u) => /\.m4a$/.test(u));
+    const got = new Map();                          // bytes received so far, per file, for the progress bar
 
     function load(url) {
       if (!bytes.has(url)) {
-        bytes.set(url, fetch(url).then((r) => { if (!r.ok) throw new Error(`${r.status} ${url}`); return r.arrayBuffer(); })
-          .then((b) => { fetched += 1; status(); return b; }, (e) => { failed = e; status(); throw e; }));
+        bytes.set(url, fetch(url).then(async (r) => {
+          if (!r.ok) throw new Error(`${r.status} ${url}`);
+          if (!compressed || !r.body) return r.arrayBuffer();
+          const reader = r.body.getReader(), parts = [];
+          let n = 0;
+          for (;;) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            parts.push(value); n += value.length; got.set(url, n); progress();
+          }
+          const out = new Uint8Array(n);
+          parts.reduce((o, part) => { out.set(part, o); return o + part.length; }, 0);
+          return out.buffer;
+        }).catch((e) => { failed = e; status(); throw e; }));
       }
       return bytes.get(url);
     }
@@ -384,24 +396,32 @@
         job.reject(new Error('superseded'));
       }
     }
-    // Everything is fetched in the background, nearest the current step first, four at a time.
-    function preload() {
-      const s = Math.round(ui.target);
-      const order = [...unique].sort((x, y) => distance(x, s) - distance(y, s));
+    // Everything is downloaded before anything plays, six at a time, then step 0 and the finished take are
+    // decoded, and only then do Play and Resolve come on. After that nothing waits on the network.
+    const TOTAL = D.audio_bytes || 0, MB = (n) => (n / 1e6).toFixed(0);
+    let isReady = !compressed;
+    function prepare() {
+      document.body.classList.add('preparing');
       let next = 0;
-      const worker = () => (next < order.length ? load(order[next++]).catch(() => null).then(worker) : null);
-      for (let i = 0; i < 4; i++) worker();
+      const worker = () => (next < unique.length ? load(unique[next++]).then(worker) : null);
+      return Promise.all(Array.from({ length: 6 }, worker))
+        .then(() => Promise.all([D.audio.state[0], D.audio.predicted[0], D.audio.finished].map(decoded)))
+        .then(() => { isReady = true; document.body.classList.remove('preparing'); document.dispatchEvent(new Event('audioready')); })
+        .catch(() => null);
     }
-    function distance(url, s) {
-      if (url === D.audio.finished) return -1;
-      const i = D.audio.state.indexOf(url), j = D.audio.predicted.indexOf(url);
-      return Math.abs((i >= 0 ? i : j) - s);
+    function progress() {
+      let n = 0; got.forEach((v) => { n += v; });
+      const bar = document.getElementById('prepbar'), text = document.getElementById('preptext');
+      if (!bar) return;
+      const f = TOTAL ? Math.min(1, n / TOTAL) : got.size / unique.length;
+      bar.style.width = `${(f * 100).toFixed(1)}%`;
+      text.textContent = TOTAL ? `${MB(n)} of ${MB(TOTAL)} MB` : `${got.size} of ${unique.length} files`;
     }
     function status() {
       const el = document.getElementById('audiostatus');
-      if (!el) return;
-      el.textContent = failed ? `Audio failed to load (${failed.message})`
-        : compressed && fetched < unique.length ? `Loading audio ${fetched} of ${unique.length}` : '';
+      if (el) el.textContent = failed ? `Audio failed to load (${failed.message})` : '';
+      const text = document.getElementById('preptext');
+      if (failed && text) text.textContent = `Audio failed to load (${failed.message}). Reload to try again.`;
     }
 
     // Playback: `origin` is the context time at which the song's 0 s would have played.
@@ -444,6 +464,7 @@
       }).catch(() => null);
     }
     function start() {
+      if (!isReady) return;
       if (location.protocol === 'file:') { failed = new Error('open this page through a web server'); status(); return; }
       ctx.resume();
       if (startAt >= D.seconds - 0.05) startAt = 0;
@@ -472,8 +493,8 @@
       if (playing && time() >= D.seconds) { pause(); startAt = 0; setPlayIcon(); }
     }
     status();
-    if (compressed) preload();
-    return { start, pause, seek, stepChanged, tick, time, get loadedStep() { return loadedStep; },
+    if (compressed) prepare();
+    return { start, pause, seek, stepChanged, tick, time, get ready() { return isReady; }, get loadedStep() { return loadedStep; },
              // What is audible now: the files with a non-zero gain (for tests and the curious).
              get sounding() { return (layers || []).filter((l) => l.weight > 0).map((l) => l.url); } };
   })();
@@ -660,7 +681,8 @@
     pinLines.innerHTML = svg;
   }
   function claim(c, chip) {
-    const view = viewKey(), step = Math.round(ui.target), at = audio.time();
+    const view = viewKey(), at = audio.time();
+    const step = ui.playing && audio.loadedStep >= 0 ? audio.loadedStep : Math.round(ui.target);   // the step being heard
     heard[view] = { ...(heard[view] || {}), [c.id]: { step, at } }; saveHeard();
     if (LOCAL) mark(view, step, PARTS[c.id][2], true);
     placePins(); drawMarks();
@@ -686,6 +708,8 @@
     drawMarks(); drawMarker(); drawGame(); placePins();
   }
   let shownKey = '';
+  const switching = () => ui.playing && audio.loadedStep !== Math.round(ui.target);   // the chosen step is not sounding yet
+  const gameKey = () => dueCues().map((c) => c.id).join() + (switching() ? '…' : '');
   function dueCues() {
     const mine = heard[viewKey()] || {}, t = audio.time();
     return CUES.filter((c) => !mine[c.id] && c.at <= t + 0.5).slice(0, SHOW);
@@ -695,18 +719,19 @@
     box.hidden = !canMark || ui.mode === 2;
     if (box.hidden) return;
     const mine = heard[viewKey()] || {}, done = CUES.filter((c) => mine[c.id]).length, due = dueCues();
-    shownKey = due.map((c) => c.id).join();
+    shownKey = gameKey();
+    const wait = switching() ? ' disabled' : '';
     $('gamecue').textContent = done === CUES.length ? 'Every part marked. The dots on the dial show the steps where the song came through.'
       : due.length ? (ui.playing || ui.animating ? 'Tap the moment you hear it' : '')
       : ui.playing || ui.animating ? 'Listen…' : 'Press Resolve, then tap the moment you hear each part come in.';
     const old = new Set([...$('gamepills').querySelectorAll('[data-id]')].map((b) => b.dataset.id));
-    $('gamepills').innerHTML = due.map((c) => `<button class="gamepill${old.has(c.id) ? '' : ' enter'}" style="--c:${c.color}" data-id="${c.id}">I hear ${c.label}</button>`).join('')
+    $('gamepills').innerHTML = due.map((c) => `<button class="gamepill${old.has(c.id) ? '' : ' enter'}" style="--c:${c.color}" data-id="${c.id}"${wait}>I hear ${c.label}</button>`).join('')
       + (!LOCAL && done ? '<button class="gamepill again" id="gameagain" title="Clear your marks and start from step 0" aria-label="Start over">↺</button>' : '');
     const again = $('gamepills').querySelector('#gameagain');
     if (again) again.onclick = () => { clearMine(); if (ui.animating) $('resolve').click(); setStep(0); audio.seek(0); };
     $('gamepills').querySelectorAll('[data-id]').forEach((b) => (b.onclick = () => claim(CUES.find((c) => c.id === b.dataset.id), b)));
   }
-  st.onFrame(() => { placePins(); if (!$('game').hidden && dueCues().map((c) => c.id).join() !== shownKey) drawGame(); });
+  st.onFrame(() => { placePins(); if (!$('game').hidden && gameKey() !== shownKey) drawGame(); });
   $('markbtn').hidden = !LOCAL;
   $('markbtn').onclick = () => { marking = !marking; $('markbtn').classList.toggle('on', marking); drawMarker(); };
 
@@ -746,7 +771,8 @@
   function renderPanel() {
     drawMarks(); drawMarker(); drawGame();
     const s = Math.round(ui.target);
-    const m = D.metrics[s];
+    const ms = ui.mode === 2 ? S : s;                    // Finished plays step 32, so its numbers are step 32's
+    const m = D.metrics[ms];
     const setName = ui.mode === 1 ? 'predicted' : 'state';
     const other = setName === 'state' ? 'predicted' : 'state';
     $('stepbig').innerHTML = `step ${s}`;
@@ -763,10 +789,10 @@
     $('bandsbtn').classList.toggle('on', ui.bands);
     const sel = setName === 'predicted' ? 1 : 0;
     METRICS.forEach((row, k) => {
-      const raw = row[2] ? row[2](m[setName] || {}) : meanSettle(sel ? settleP : settleS, s);
+      const raw = row[2] ? row[2](m[setName] || {}) : meanSettle(sel ? settleP : settleS, ms);
       metricEls[k].val.textContent = row[0].startsWith('Brightness') ? (raw == null ? '–' : Math.round(raw)) : num(raw);
       const [a, b] = metricSeries[k];
-      EX.spark(metricEls[k].cv, sel ? [a, b] : [b, a], s, ['rgba(141,154,179,.45)', sel ? '#ff5fb4' : '#9b6bff']);
+      EX.spark(metricEls[k].cv, sel ? [a, b] : [b, a], ms, ['rgba(141,154,179,.45)', sel ? '#ff5fb4' : '#9b6bff']);
     });
     bandRows.forEach((row, i) => {
       const n = BANDNAMES[i];
@@ -775,7 +801,7 @@
       row.querySelector('.ghost').style.left = `${Math.max(0, (o ?? 0)) * 100}%`;
       row.querySelector('.v').textContent = num(v, 2);
     });
-    drawSettleMap(s);
+    drawSettleMap(ms);
   }
   const rgbCss = (x) => css(rampJS(0.2 + 0.8 * x));
 
@@ -837,10 +863,16 @@
   function setPlayIcon() { $('play').textContent = ui.playing ? '❚❚' : '▶'; if (typeof drawGame === 'function') drawGame(); }
   function togglePlay() { if (ui.playing) audio.pause(); else audio.start(); setPlayIcon(); }
   $('play').onclick = togglePlay;
+  // Resolve ties each step to a moment in the song (step × pace), so starting from any step plays from that
+  // step's moment, and step 32 always lands a second before the last chorus.
   $('resolve').onclick = () => {
-    ui.animating = !ui.animating; if (ui.animating && ui.target >= S) setStep(0, true); ui.animClock = 0;
-    if (ui.animating && ui.target === 0) audio.seek(0);                 // from the top, so the pace lands on the last chorus
-    if (ui.animating && !ui.playing) { audio.start(); setPlayIcon(); }   // the process is something to hear, not only watch
+    if (!audio.ready) return;
+    ui.animating = !ui.animating;
+    if (ui.animating) {
+      if (ui.target >= S) setStep(0, true);
+      audio.seek(ui.target * ui.pace);
+      if (!ui.playing) { audio.start(); setPlayIcon(); }   // the process is something to hear, not only watch
+    }
     $('resolve').classList.toggle('on', ui.animating); drawGame();
   };
   $('slider').oninput = (e) => setStep(+e.target.value);
@@ -903,10 +935,10 @@
   // --- frame loop ---------------------------------------------------------------------
   let intro = reduced ? 1 : 0;
   st.onFrame((dt, now) => {
-    if (ui.animating) {
-      ui.animClock = (ui.animClock || 0) + dt;
-      const rate = ui.playing ? 1 / ui.pace : 2.6;     // steps per second: the listener's pace with sound, brisk without
-      if (ui.animClock > 1 / rate) { ui.animClock = 0; if (ui.target >= S) { ui.animating = false; $('resolve').classList.remove('on'); drawGame(); } else setStep(ui.target + 1, true); }
+    if (ui.animating && ui.playing) {                   // the step follows the song; paused, it holds
+      const want = Math.min(S, Math.floor(audio.time() / ui.pace + 1e-6));
+      if (want !== ui.target) setStep(want, true);
+      if (want >= S) { ui.animating = false; $('resolve').classList.remove('on'); drawGame(); }
     }
     const k = reduced ? 1 : 1 - Math.exp(-dt * 7);
     ui.shown += (ui.target - ui.shown) * k; if (Math.abs(ui.target - ui.shown) < 1e-3) ui.shown = ui.target;

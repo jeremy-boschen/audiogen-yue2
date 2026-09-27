@@ -150,6 +150,9 @@ def cmd_publish(args):
     done: dict = {}
     focus = _publish_audio(focus, out, args.media_base, done)
     stack = _publish_audio(stack, out, args.media_base, done)
+    # The page downloads all of it before playing; the total lets its progress bar count bytes.
+    focus_files = {u.rsplit("/", 1)[-1] for u in [focus["audio"]["finished"], *focus["audio"]["state"], *focus["audio"]["predicted"]]}
+    focus["audio_bytes"] = sum((out / "media" / n).stat().st_size for n in focus_files)
     explore.write_data(out, "focus", "FOCUS", focus)
     explore.write_data(out, "stack", "STACK", stack)
     explore.write_data(out, "summary", "SUMMARY", {

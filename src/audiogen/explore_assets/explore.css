@@ -144,6 +144,7 @@ kbd { font: 600 10.5px -apple-system, sans-serif; border: 1px solid var(--line);
 .gamepill:nth-child(2) { animation-delay: .3s; } .gamepill:nth-child(3) { animation-delay: .6s; } .gamepill:nth-child(4) { animation-delay: .9s; }
 .gamepill:hover, .gamepill:focus-visible { transform: translateY(-1px); background: rgba(40, 60, 100, .85); }
 .gamepill:active { transform: scale(.97); }
+.gamepill:disabled { opacity: .45; cursor: progress; }
 .gamepill.got { animation: none; color: var(--muted); font-weight: 500; border-color: rgba(255, 255, 255, .12); background: rgba(10, 15, 28, .55); }
 .gamepill.got i { width: 8px; height: 8px; border-radius: 50%; background: var(--c); box-shadow: 0 0 8px var(--c); }
 .gamepill.got b { color: var(--text); font-weight: 700; }
@@ -302,6 +303,19 @@ input[type=range] { width: 100%; accent-color: var(--pink); }
 .pintags b { color: var(--text); font-weight: 650; margin-left: 2px; }
 .fly { position: fixed; left: -7px; top: -7px; z-index: 40; width: 14px; height: 14px; border-radius: 50%; background: var(--c);
        box-shadow: 0 0 18px var(--c), 0 0 0 2.5px rgba(10, 15, 28, .65); pointer-events: none; }
+/* Web build: everything downloads before Play and Resolve come on. */
+.prep { display: none; }
+body.preparing .prep { position: fixed; left: 16px; right: 392px; bottom: 96px; z-index: 6; display: flex; flex-direction: column; align-items: center; gap: 9px; pointer-events: none; }
+body.preparing .game { visibility: hidden; }
+body.preparing #play, body.preparing #resolve { opacity: .35; pointer-events: none; }
+.preptitle { font: 600 17px/1 var(--serif); color: #f1ecff; text-shadow: 0 1px 14px rgba(10, 15, 28, .9); }
+.preptrack { width: min(360px, 70%); height: 6px; border-radius: 999px; background: rgba(255, 255, 255, .1); overflow: hidden;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, .06); }
+.prepbar { width: 0; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #4f8cff, #9b6bff 45%, #ff5fb4 75%, #ff9a4d);
+  box-shadow: 0 0 12px rgba(255, 95, 180, .6); transition: width .25s ease-out; }
+.prepsub { color: #b9c2da; font-size: 12px; text-shadow: 0 1px 12px rgba(10, 15, 28, .9); font-variant-numeric: tabular-nums; }
+@media (max-width: 900px) { body.preparing .prep { right: 16px; } }
+
 .gamepill.enter { animation: gamein .5s ease-out, gamebreathe 2.6s ease-in-out .5s infinite; }
 @keyframes gamein { 0% { opacity: 0; transform: translateY(10px) scale(.9); } 100% { opacity: 1; transform: none; } }
 .cuemark circle { fill: var(--c); opacity: .45; pointer-events: none; }
