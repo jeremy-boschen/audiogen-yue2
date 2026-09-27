@@ -5,11 +5,13 @@
     bin/explore.py stack RUN           "The stack": score / semantic tokens / latent / audio on one time axis
     bin/explore.py map ROOT [ROOT...]  "Take map": every finished take placed by envelope similarity
     bin/explore.py all                 rebuild all three from the default runs, plus index.html
+    bin/explore.py serve               serve the pages on 127.0.0.1 and open them (the focus view needs it)
+    bin/explore.py publish [RUN]       one take's focus and stack views as a site for the web
 
 Output goes to --out (default ../audiogen/output/microscope-runs/00_explore/).
-Pages load their data from data/*.js (no fetch, so file:// works) and refer to
-audio in the runs by relative path; open index.html directly, or serve the
-microscope-runs directory. `map` is safe to re-run as study runs finish: it
+Pages load their data from data/*.js and refer to audio in the runs by relative
+path. The focus view fetches and decodes its audio (Web Audio), which browsers
+refuse from file://, so open the pages through `serve`. `map` is safe to re-run as study runs finish: it
 only reads runs whose metadata.json has "finished", and caches features in
 OUT/cache/ keyed by file size and mtime.
 """
@@ -183,6 +185,20 @@ def cmd_publish(args):
           f"{sum((out / 'media' / n).stat().st_size for n in manifest) / 2**20:.0f} MB, media base {args.media_base}")
 
 
+def cmd_serve(args):
+    """Serve the microscope-runs directory on localhost and open the explorer in it."""
+    import functools
+    import http.server
+    import webbrowser
+    root = args.out.parent          # the pages reach the runs with ../
+    handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=str(root))
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", args.port), handler)
+    url = f"http://127.0.0.1:{args.port}/{args.out.name}/index.html"
+    print("serving", root, "at", url, flush=True)
+    webbrowser.open(url)
+    server.serve_forever()
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--out", type=pathlib.Path, default=DEFAULT_OUT)
@@ -191,6 +207,7 @@ def main():
     sub.add_parser("stack").add_argument("run")
     sub.add_parser("map").add_argument("roots", nargs="+")
     sub.add_parser("all")
+    sub.add_parser("serve").add_argument("--port", type=int, default=8771)
     publish = sub.add_parser("publish", help="one take's focus and stack views as a site for the web")
     publish.add_argument("run", nargs="?", default=str(DEFAULT_RUN))
     publish.add_argument("--title", default="Slow Down")
@@ -205,7 +222,7 @@ def main():
         args.out = RUNS / "00_publish"
     args.out = args.out.resolve()
     {"focus": cmd_focus, "stack": cmd_stack, "map": cmd_map, "all": cmd_all,
-     "publish": cmd_publish}[args.command](args)
+     "publish": cmd_publish, "serve": cmd_serve}[args.command](args)
 
 
 if __name__ == "__main__":

@@ -208,92 +208,164 @@
     mixT: 0, finT: 0, animating: false,
   };
 
-  // --- audio: parallel elements, switched by volume, never seeked while playing ----------
-  const audio = (() => {
-    const make = (src) => { const a = new Audio(); a.preload = 'auto'; a.src = src; a.volume = 0; return a; };
-    let els = null, loadedStep = -1, pending = null, debounce = null, startAt = 0;
-    const want = () => [ui.mode === 0 ? 1 : 0, ui.mode === 1 ? 1 : 0, ui.mode === 2 ? 1 : 0];
-    function build(step) {
-      return { state: make(D.audio.state[step]), predicted: make(D.audio.predicted[step]), finished: make(D.audio.finished) };
+  // --- audio: Web Audio, every layer scheduled on one clock -----------------------------
+  // The compressed files are fetched up front (the current step first) and decoded on demand,
+  // a few at a time. Every layer is an AudioBufferSourceNode started at the same context time
+  // and offset, so a step change is a crossfade between buffers that are already in step: no
+  // media elements to keep in lockstep, and gain nodes work where element volume does not (iOS).
+  const audio = window.focusAudio = (() => {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    const ctx = new Ctx();
+    const FADE = 0.06, KEEP = 8;
+    const files = [D.audio.finished, ...D.audio.state.flatMap((s, i) => [s, D.audio.predicted[i]])];
+    const unique = [...new Set(files)];
+    const bytes = new Map(), buffers = new Map();
+    let fetched = 0, failed = null;
+    // The web build ships AAC (~2 MB a step), kept after download so any step decodes at once. The
+    // local build points at the runs' WAV listening copies (~35 MB each): fetched when needed and
+    // let go once decoded, never all held at once.
+    const compressed = unique.every((u) => /\.m4a$/.test(u));
+
+    function load(url) {
+      if (!bytes.has(url)) {
+        bytes.set(url, fetch(url).then((r) => { if (!r.ok) throw new Error(`${r.status} ${url}`); return r.arrayBuffer(); })
+          .then((b) => { fetched += 1; status(); return b; }, (e) => { failed = e; status(); throw e; }));
+      }
+      return bytes.get(url);
     }
-    function master() { return els ? els.finished : null; }
-    function time() { const m = master(); return m && !isNaN(m.currentTime) ? m.currentTime : startAt; }
-    function all(set) { return set ? [set.state, set.predicted, set.finished] : []; }
+    // Decoding is queued here, two at a time, because Safari decodes one file at a time and
+    // slowly: left to itself, a ramp through 32 steps queued ~100 decodes and the step it
+    // stopped on waited behind all of them. A queued decode nobody still wants is dropped.
+    const queue = [];
+    let decoding = 0;
+    function pump() {
+      while (decoding < 2 && queue.length) {
+        const job = queue.shift();
+        decoding += 1;
+        load(job.url).then((b) => ctx.decodeAudioData(b.slice(0)))    // slice: decoding detaches its input
+          .then((buffer) => { if (!compressed) bytes.delete(job.url); return buffer; })
+          .then(job.resolve, job.reject)
+          .finally(() => { decoding -= 1; pump(); });
+      }
+    }
+    // Most recently used last; beyond KEEP the oldest decoded buffers are let go (~36 MB each).
+    function decoded(url) {
+      let job = buffers.get(url);
+      if (job) buffers.delete(url);
+      else {
+        job = { url };
+        job.promise = new Promise((resolve, reject) => { job.resolve = resolve; job.reject = reject; });
+        job.promise.catch(() => null);
+        queue.push(job);
+        pump();
+      }
+      buffers.set(url, job);
+      for (const [key, old] of buffers) {
+        if (buffers.size <= KEEP) break;
+        if (!queue.includes(old)) buffers.delete(key);
+      }
+      return job.promise;
+    }
+    function prune(keep) {
+      for (let i = queue.length - 1; i >= 0; i--) {
+        if (keep.has(queue[i].url)) continue;
+        const [job] = queue.splice(i, 1);
+        buffers.delete(job.url);
+        job.reject(new Error('superseded'));
+      }
+    }
+    // Everything is fetched in the background, nearest the current step first, four at a time.
+    function preload() {
+      const s = Math.round(ui.target);
+      const order = [...unique].sort((x, y) => distance(x, s) - distance(y, s));
+      let next = 0;
+      const worker = () => (next < order.length ? load(order[next++]).catch(() => null).then(worker) : null);
+      for (let i = 0; i < 4; i++) worker();
+    }
+    function distance(url, s) {
+      if (url === D.audio.finished) return -1;
+      const i = D.audio.state.indexOf(url), j = D.audio.predicted.indexOf(url);
+      return Math.abs((i >= 0 ? i : j) - s);
+    }
+    function status() {
+      const el = document.getElementById('audiostatus');
+      if (!el) return;
+      el.textContent = failed ? `Audio failed to load (${failed.message})`
+        : compressed && fetched < unique.length ? `Loading audio ${fetched} of ${unique.length}` : '';
+    }
+
+    // Playback: `origin` is the context time at which the song's 0 s would have played.
+    let origin = 0, startAt = 0, playing = false, want = 0, layers = null, loadedStep = -1;
+    const weights = () => [ui.mode === 0 ? 1 : 0, ui.mode === 1 ? 1 : 0, ui.mode === 2 ? 1 : 0];
+    const time = () => (playing ? Math.min(D.seconds, ctx.currentTime - origin) : startAt);
+
+    function voice(buffer, weight, when, offset) {
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(0, when);
+      gain.gain.linearRampToValueAtTime(weight, when + FADE);
+      gain.connect(ctx.destination);
+      const src = ctx.createBufferSource();
+      src.buffer = buffer; src.connect(gain); src.start(when, Math.max(0, offset));
+      return { src, gain };
+    }
+    function release(set, when) {
+      (set || []).forEach(({ src, gain }) => {
+        gain.gain.cancelScheduledValues(when);
+        gain.gain.setValueAtTime(gain.gain.value, when);
+        gain.gain.linearRampToValueAtTime(0, when + FADE);
+        src.stop(when + FADE + 0.01);
+      });
+    }
+    // Sound step `s` from the playhead, fading out whatever was sounding. Latest request wins.
+    function sound(s) {
+      want = s;
+      const urls = [D.audio.state[s], D.audio.predicted[s], D.audio.finished];
+      const near = [s - 1, s + 1].filter((n) => n >= 0 && n <= D.steps).flatMap((n) => [D.audio.state[n], D.audio.predicted[n]]);
+      prune(new Set([...urls, ...near]));
+      const ready = Promise.all(urls.map(decoded));
+      // Then the steps either side, so a ramp finds its next step already decoded.
+      near.forEach(decoded);
+      return ready.then((bufs) => {
+        if (!playing || want !== s) return;
+        const when = ctx.currentTime + 0.03, w = weights();
+        const next = bufs.map((b, i) => ({ ...voice(b, w[i], when, when - origin), url: urls[i], weight: w[i] }));
+        release(layers, when);
+        layers = next; loadedStep = s;
+      }).catch(() => null);
+    }
     function start() {
-      const step = Math.round(ui.target);
-      if (!els || loadedStep !== step) { stopAll(els); els = build(step); loadedStep = step; }
-      const t = startAt;
-      all(els).forEach((a) => { a.pause(); a.currentTime = t; a.playbackRate = 1; });   // paused: seeking allowed
-      Promise.all(all(els).map((a) => a.play().catch(() => null))).then(() => {});
-      ui.playing = true;
+      if (location.protocol === 'file:') { failed = new Error('open this page through a web server'); status(); return; }
+      ctx.resume();
+      if (startAt >= D.seconds - 0.05) startAt = 0;
+      origin = ctx.currentTime + 0.05 - startAt;
+      playing = true; ui.playing = true;
+      sound(Math.round(ui.target));
     }
-    function stopAll(set) { all(set).forEach((a) => { a.pause(); a.removeAttribute('src'); a.load(); }); }
-    function pause() { startAt = time(); all(els).forEach((a) => a.pause()); if (pending) { stopAll(pending.set); pending = null; } ui.playing = false; }
+    function pause() {
+      startAt = time();
+      release(layers, ctx.currentTime); layers = null; loadedStep = -1;
+      playing = false; ui.playing = false;
+    }
     function seek(t) {
       startAt = Math.max(0, Math.min(D.seconds - 0.05, t));
-      if (ui.playing) { all(els).forEach((a) => a.pause()); if (pending) { stopAll(pending.set); pending = null; } start(); }
+      if (playing) { release(layers, ctx.currentTime); layers = null; origin = ctx.currentTime + 0.05 - startAt; sound(Math.round(ui.target)); }
     }
-    function stepChanged() {
-      clearTimeout(debounce);
-      if (!ui.playing) return;
-      debounce = setTimeout(() => {
-        const step = Math.round(ui.target);
-        if (step === loadedStep || (pending && pending.step === step)) return;
-        if (pending) stopAll(pending.set);
-        const set = { state: make(D.audio.state[step]), predicted: make(D.audio.predicted[step]) };
-        pending = { step, set, born: performance.now() };
-        // Seek while still paused (never while playing), a hair ahead of the master to cover
-        // the start-up latency; the drift corrector removes what is left after adoption.
-        [set.state, set.predicted].forEach((a) => {
-          a.addEventListener('canplay', () => {
-            if (!pending || pending.set !== set || !a.paused) return;
-            a.currentTime = Math.min(D.seconds - 0.05, time() + 0.05);
-            a.play().catch(() => null);
-          }, { once: true });
-        });
-      }, 150);
-    }
-    function adopt() {
-      const prev = els;
-      els = { state: pending.set.state, predicted: pending.set.predicted, finished: prev.finished };
-      loadedStep = pending.step; pending = null;
-      // fade the outgoing pair out, then drop it
-      const out = [prev.state, prev.predicted];
-      const fade = setInterval(() => {
-        out.forEach((a) => { a.volume = Math.max(0, a.volume - 0.2); });
-        if (out.every((a) => a.volume <= 0)) { clearInterval(fade); out.forEach((a) => { a.pause(); a.removeAttribute('src'); a.load(); }); }
-      }, 20);
-    }
+    function stepChanged() { if (playing) sound(Math.round(ui.target)); }
+    let lastMode = ui.mode;
     function tick() {
-      if (!els) return;
-      const w = want();
-      const m = master();
-      // Adopt a pending step as soon as both of its elements are actually playing and within a
-      // quarter second of the master. A pair that never starts is dropped, never adopted:
-      // adopting a paused pair is what used to leave the audio silent until a restart.
-      if (pending && ui.playing) {
-        const pair = [pending.set.state, pending.set.predicted];
-        if (pair.every((a) => !a.paused && a.readyState >= 3 && Math.abs(a.currentTime - m.currentTime) < 0.25)) adopt();
-        else if (performance.now() - pending.born > 6000) { stopAll(pending.set); pending = null; }
+      if (layers && ui.mode !== lastMode) {
+        const now = ctx.currentTime, w = weights();
+        layers.forEach((layer, i) => { layer.weight = w[i]; });
+        layers.forEach(({ gain }, i) => { gain.gain.cancelScheduledValues(now); gain.gain.setValueAtTime(gain.gain.value, now); gain.gain.linearRampToValueAtTime(w[i], now + FADE); });
       }
-      // Anything that should be sounding but has stalled is restarted at the master's time.
-      if (ui.playing && !m.paused) {
-        [els.state, els.predicted].forEach((a) => {
-          if (a.paused && !a.ended && a.readyState >= 2) { a.currentTime = m.currentTime; a.play().catch(() => null); }
-        });
-      }
-      const drift = (a) => {
-        if (!ui.playing || a.paused || a === m) return;
-        const d = a.currentTime - m.currentTime;
-        a.playbackRate = Math.abs(d) < 0.012 ? 1 : 1 - Math.max(-0.08, Math.min(0.08, d * 1.5));
-      };
-      [els.state, els.predicted].forEach(drift);
-      if (pending) [pending.set.state, pending.set.predicted].forEach(drift);
-      [els.state, els.predicted, els.finished].forEach((a, i) => { a.volume += (w[i] - a.volume) * 0.35; if (Math.abs(a.volume - w[i]) < 0.01) a.volume = w[i]; });
-      if (pending) { pending.set.state.volume = 0; pending.set.predicted.volume = 0; }
-      if (ui.playing && m.ended) { pause(); startAt = 0; setPlayIcon(); }
+      lastMode = ui.mode;
+      if (playing && time() >= D.seconds) { pause(); startAt = 0; setPlayIcon(); }
     }
-    return { start, pause, seek, stepChanged, tick, time, get loadedStep() { return loadedStep; } };
+    status();
+    if (compressed) preload();
+    return { start, pause, seek, stepChanged, tick, time, get loadedStep() { return loadedStep; },
+             // What is audible now: the files with a non-zero gain (for tests and the curious).
+             get sounding() { return (layers || []).filter((l) => l.weight > 0).map((l) => l.url); } };
   })();
 
   // --- panel ---------------------------------------------------------------------------
