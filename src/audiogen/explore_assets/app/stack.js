@@ -34,10 +34,10 @@
   const xOf = (t) => (t - TMAX / 2) * K;
   const tOf = (x) => x / K + TMAX / 2;
   const LAYERS = [
-    { key: 'audio', y: 0, name: 'Audio', sub: 'spectrogram of the take' },
-    { key: 'latent', y: 18, name: 'Acoustic latent', sub: `${D.latent.frames} × ${D.latent.channels}, what the ODE solved` },
-    { key: 'semantic', y: 36, name: 'Semantic tokens', sub: `${D.semantic.count} tokens · 25/s · ${D.semantic.distinct} distinct` },
-    { key: 'score', y: 54, name: 'Score', sub: `${D.score.key} · ${D.score.tempo} · score time` },
+    { key: 'audio', y: 0, name: 'Audio', sub: `what you hear · ${EX.g('spectrogram', 'spectrogram')}` },
+    { key: 'latent', y: 18, name: EX.g('latent', 'Latent'), sub: `the detailed sketch of the sound · ${D.latent.frames} × ${D.latent.channels}` },
+    { key: 'semantic', y: 36, name: EX.g('tokens', 'Semantic tokens'), sub: `the rough draft · ${D.semantic.count} codes, 25 a second` },
+    { key: 'score', y: 54, name: EX.g('score', 'Score'), sub: `the plan · ${D.score.key} · ${D.score.tempo}` },
   ];
   const Y = Object.fromEntries(LAYERS.map((l) => [l.key, l.y]));
 
@@ -247,13 +247,13 @@
   const phrases = D.phrases.map((p, i) => ({ ...p, i }));
   const secOf = (t) => D.score.sections.find((s) => t >= s.start && t < s.end);
   const phraseAt = (t) => phrases.find((p) => t >= p.start && t < p.start + (p.seconds || 0));
-  $('phrasecount').textContent = `${phrases.length} · score time`;
+  $('phrasecount').innerHTML = `${phrases.length} · ${EX.g('scoretime', 'score time')} · ${EX.g('nps', 'notes per syllable')}`;
   $('phrases').innerHTML = phrases.map((p) => `<div class="item" data-i="${p.i}">
       <span class="dot" style="background:${css(rampJS(0.45 + (p.notes_per_syllable ? Math.min(1, (p.notes_per_syllable - 0.6) / 1.2) : 0) * 0.55))}"></span>
       <span class="t">${p.lyrics ? `<span class="lyric">${p.lyrics}</span>` : p.heard ? '' : `<span class="lyric none">${D.heard ? 'no words heard' : 'no lyric line paired'}</span>`}
         ${p.heard ? `<span class="heardwords ${p.lyrics ? '' : 'alone'}"><span class="heardtag">heard</span> ${asWritten(p) ? 'as written' : esc(p.heard)}</span>` : ''}
         <small>${p.section} · phrase ${p.number} · ${fmt(p.start)}${p.start >= D.seconds ? ' · past the end of the audio' : ''}</small></span>
-      <span class="n">${p.notes_per_syllable != null ? p.notes_per_syllable.toFixed(2) + ' n/s' : '–'}</span></div>`).join('');
+      <span class="n">${p.notes_per_syllable != null ? p.notes_per_syllable.toFixed(2) : '–'}</span></div>`).join('');
   const items = [...document.querySelectorAll('#phrases .item')];
   items.forEach((el) => (el.onclick = () => playPhrase(phrases[+el.dataset.i])));
   const notes = [];
@@ -390,12 +390,12 @@
       const k = noteMeshes[vocal] ? noteMeshes[vocal].count : 0, v = D.score.voices[vocal];
       const x = k > 0 ? v.t0[k - 1] + v.dur[k - 1] : 0;
       frontier.visible = true; frontier.position.set(xOf(x), Y.score + 3, 0);
-      phase = `Writing the score: ABC token ~${tok}. The header is fixed in the first 50 tokens; after that the plan is written strictly left to right.`;
+      phase = `Writing the ${EX.g('score', 'score')}, the sheet music, left to right: symbol ~${tok}.`;
     } else if (g < semEnd) {
       frontier.visible = true; frontier.position.set(xOf(tokens / D.semantic.rate), Y.semantic + 3, 0);
-      phase = `Sampling semantic tokens: ${tokens} of ${ids.length} (${(tokens / D.semantic.rate).toFixed(0)} s of music).`;
-    } else { frontier.visible = false; phase = 'Acoustic ODE and decode (not timed in this view): latent and audio develop.'; }
-    $('clock').textContent = done ? `generation took ≥ ${fmt(semEnd)} (plan ${fmt(planEnd)})` : `generation clock ${fmt(g)}`;
+      phase = `Drafting the sound as ${EX.g('tokens', 'tokens')}: ${tokens} of ${ids.length}, ${(tokens / D.semantic.rate).toFixed(0)} s of music so far.`;
+    } else { frontier.visible = false; phase = `Then the ${EX.g('latent', 'latent')} is cleaned up from static and decoded to audio (not timed here; that is <a href="focus.html">Coming into focus</a>).`; }
+    $('clock').textContent = done ? `written in ${fmt(semEnd)}${planEnd ? `, the score in ${fmt(planEnd)}` : ''}` : `writing… ${fmt(g)}`;
     $('phase').innerHTML = phase;
     $('gen').value = Math.round(g / GEN_END * 1000);
     $('replay').textContent = replaying ? '❚❚' : '▶';

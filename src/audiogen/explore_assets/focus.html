@@ -12,13 +12,14 @@
 <div class="hero">
   <div class="kicker">Generation microscope · from noise to song</div>
   <h1>Coming into focus</h1>
-  <p>The model builds the sound of the whole song at once, from noise, in 32 steps. Here it is at every step:
-     time runs left to right, pitch front to back, loudness up. Press <em>Resolve</em> and hear it come through.</p>
+  <p>The model makes the sound of the whole song at once, starting from static and cleaning it up in 32
+     <dfn data-g="step">steps</dfn>. Here it is at every step: time runs left to right, pitch front to back, loudness up.
+     Press <em>Resolve</em> and hear it come through.</p>
 </div>
 
 <aside class="panel right compact" id="panel">
   <div class="ringwrap">
-    <svg class="ring" id="ring" viewBox="0 0 150 150" data-help="<b>The 32 steps.</b> The model doesn't write a song from start to finish. It starts from pure static and cleans up the whole song a little at every step, like a photo developing. Drag the ring or press <kbd>←</kbd> <kbd>→</kbd> to stop at any step and listen. A colored dot marks each step where you heard something come in."></svg>
+    <svg class="ring" id="ring" viewBox="0 0 150 150" data-help="<b>The 32 steps.</b> The model doesn't write a song from start to finish. It starts from pure static and cleans up the whole song a little at every step, like a photo developing. Drag the ring or press <kbd>←</kbd> <kbd>→</kbd> to stop at any step and listen. A colored dot marks each step where you heard something come in.&lt;small class=&quot;tech&quot;&gt;Flow matching: 32 Euler steps from t = 1 (noise) to t = 0.&lt;/small&gt;"></svg>
     <div class="stepinfo">
       <div class="big" id="stepbig">0</div>
       <div class="sub" id="stepsub"></div>
@@ -32,15 +33,15 @@
   <input type="range" id="slider" min="0" max="32" step="1" value="0" aria-label="Step" data-help="<b>Move through the steps.</b> Step 0 is pure static; step 32 is the finished song. The sound follows as you drag.">
   <div class="viewrow">
     <div class="seg" id="modes">
-      <button data-mode="0" data-help="<b>State</b>: the song exactly as the model has it at this step, noise and all. Early on it's mostly static with the song faint underneath. <kbd>1</kbd>">State</button>
-      <button data-mode="1" data-help="<b>Predicted</b>: the model's guess at the finished song, made from this step. It is often recognizable surprisingly early: the model knows what the song is long before it can play it cleanly. <kbd>2</kbd>">Predicted</button>
+      <button data-mode="0" data-help="<b>State</b>: the song exactly as the model has it at this step, noise and all. Early on it's mostly static with the song faint underneath. <kbd>1</kbd>&lt;small class=&quot;tech&quot;&gt;x_t at this step, decoded to audio.&lt;/small&gt;">State</button>
+      <button data-mode="1" data-help="<b>Predicted</b>: the model's guess at the finished song, made from this step. It is often recognizable surprisingly early: the model knows what the song is long before it can play it cleanly. <kbd>2</kbd>&lt;small class=&quot;tech&quot;&gt;x̂₀ = x_t − t·v, decoded: the one-jump estimate of the end.&lt;/small&gt;">Predicted</button>
       <button data-mode="2" data-help="<b>Finished</b>: the end result, step 32, to compare against. <kbd>3</kbd>">Finished</button>
     </div>
-    <button class="icon" id="ghost" data-help="<b>Ghost</b>: a see-through outline of the other view floats above the land. Showing State, the ghost is where the song is heading, and the gap between them is how far it still has to go. <kbd>G</kbd>" aria-label="Ghost overlay">
+    <button class="icon" id="ghost" data-help="<b>Ghost</b>: a see-through outline of the other view floats above the land. Showing State, the ghost is where the song is heading, and the gap between them is how far it still has to go. <kbd>G</kbd>&lt;small class=&quot;tech&quot;&gt;The other view drawn as contour lines above the terrain.&lt;/small&gt;" aria-label="Ghost overlay">
       <svg viewBox="0 0 20 20"><path d="M3 13 L7 9 L10 11 L17 5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-dasharray="2 2"/><path d="M3 16 L7 12 L10 14 L17 9" fill="none" stroke="currentColor" stroke-width="1.8"/></svg></button>
-    <button class="icon" id="settlebtn" data-help="<b>Settling color</b>: the parts of the land that already match the finished song turn to color; parts still changing stay gray and glitter. Watch the color spread as the steps go by. <kbd>C</kbd>" aria-label="Settling color">
+    <button class="icon" id="settlebtn" data-help="<b>Settling color</b>: the parts of the land that already match the finished song turn to color; parts still changing stay gray and glitter. Watch the color spread as the steps go by. <kbd>C</kbd>&lt;small class=&quot;tech&quot;&gt;Color follows each band's envelope correlation with the final take.&lt;/small&gt;" aria-label="Settling color">
       <svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="6.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M10 3.5 A6.5 6.5 0 0 1 10 16.5 Z" fill="currentColor"/></svg></button>
-    <button class="icon" id="bandsbtn" aria-label="Pitch bands" data-help="<b>Pitch bands</b> color the land by how low or high the sound is. <b>Bass</b>: kick drum and bass. <b>Body</b>: the warmth of voices and instruments. <b>Voice &amp; lead</b>: where singing and melodies sit. <b>Bite</b>: consonants, snares, cymbals. <b>Air</b>: breath and shimmer. <kbd>B</kbd>">
+    <button class="icon" id="bandsbtn" aria-label="Pitch bands" data-help="<b>Pitch bands</b> color the land by how low or high the sound is. <b>Bass</b>: kick drum and bass. <b>Body</b>: the warmth of voices and instruments. <b>Voice &amp; lead</b>: where singing and melodies sit. <b>Bite</b>: consonants, snares, cymbals. <b>Air</b>: breath and shimmer. <kbd>B</kbd>&lt;small class=&quot;tech&quot;&gt;Log-spaced bands from 40 Hz to 16 kHz.&lt;/small&gt;">
       <svg viewBox="0 0 20 20"><rect x="3" y="4" width="14" height="2.4" rx="1.2" fill="#c49bff"/><rect x="3" y="8.8" width="14" height="2.4" rx="1.2" fill="#7fe0b4"/><rect x="3" y="13.6" width="14" height="2.4" rx="1.2" fill="#ff7a59"/></svg></button>
   </div>
   <button class="btn" id="markbtn" hidden title="Mark what you can hear at this step (M)">Mark what I hear <kbd>M</kbd></button>
@@ -51,7 +52,7 @@
 
   <h3>When each pitch band locks in <small>click to jump</small></h3>
   <div class="bars" id="bands"></div>
-  <canvas id="settlemap" data-help="<b>When each pitch band locks in.</b> Each row is a slice of pitch, bass at the bottom and air at the top; each column is a step. A row turns bright once that slice moves in time with the finished song, and a small tick marks the step it locks in for good. Bass and rhythm usually lock first, fine detail last. Click to jump to a step."></canvas>
+  <canvas id="settlemap" data-help="<b>When each pitch band locks in.</b> Each row is a slice of pitch, bass at the bottom and air at the top; each column is a step. A row turns bright once that slice moves in time with the finished song, and a small tick marks the step it locks in for good. Bass and rhythm usually lock first, fine detail last. Click to jump to a step.&lt;small class=&quot;tech&quot;&gt;Per-band envelope correlation with the final take, per step; ticks where it stays at 0.9 or above.&lt;/small&gt;"></canvas>
 
   <div class="honest" id="honest" data-help="<b>What these numbers can and can't say.</b> Everything in this panel is measured from the sound of this one take. It shows where the signal changes, not what a person hears. Whether you can make out a voice at a step is for your ears, which is what the <b>I hear</b> buttons are for."><b>Signal statistics, not listening results.</b> Whether you can hear a voice at a step is for your ears.</div>
   <div class="hoverhelp" id="hoverhelp" aria-live="polite"></div>

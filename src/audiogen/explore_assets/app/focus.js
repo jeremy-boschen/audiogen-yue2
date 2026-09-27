@@ -6,10 +6,12 @@
   EX.nav('focus');
   EX.help('focus', `
     <h2>Watching a song come into focus</h2>
-    <p>YuE2, an open AI music model, makes the sound of a whole song at once, the way a photo develops: it starts from pure
-      noise and cleans it up in 32 steps. This is one real generation, recorded at every step.</p>
-    <p>The landscape is the sound. <b>Left to right</b> is time, <b>front to back</b> is pitch (bass in front), <b>height</b>
-      is loudness. Gray glitter is still forming; color has settled.</p>
+    <p>YuE2 is an open AI music model. It doesn't record a song from start to finish: it makes the sound of the whole song
+      at once, starting from pure static and cleaning it up in 32 ${EX.g('step', 'steps')}, the way a photo develops.
+      This page is one real song, recorded at every step.</p>
+    <p>The landscape is the sound, a ${EX.g('spectrogram', 'spectrogram')} in 3D. <b>Left to right</b> is time, <b>front to
+      back</b> is pitch (bass in front), <b>height</b> is loudness. Gray glitter is still forming; color has settled.</p>
+    <p style="color:var(--muted)">Dotted words explain themselves when you point at them.</p>
     `, `
     <h3 style="margin-top:0">Try it</h3>
     <p>Press <b>Resolve</b> and listen to the song come out of the noise. Tap <b>I hear…</b> the moment you hear a voice,
@@ -41,7 +43,7 @@
   // so its center is that space's center. Orbiting keeps the offset; R and resizes re-frame.
   const HOME_DIR = home.pos.clone().sub(home.target);
   const BOX = [];
-  for (const x of [-W / 2 - 16, W / 2 + 16]) for (const y of [0, 30]) for (const z of [-DEPTH / 2 - 2, DEPTH / 2 + 10]) BOX.push(new T.Vector3(x, y, z));
+  for (const x of [-W / 2 - 16, W / 2 + 16]) for (const y of [0, 30]) for (const z of [-DEPTH / 2 - 2, DEPTH / 2 + 12]) BOX.push(new T.Vector3(x, y, z));
   function frameView() {
     const w = st.host.clientWidth, h = st.host.clientHeight;
     const panel = document.getElementById('panel').getBoundingClientRect();
@@ -235,22 +237,30 @@
   const wallX = -W / 2 - 6, m4 = new T.Matrix4(), col = new T.Color();
   const bandGap = DEPTH / B * 0.8;
 
-  // Section bands on the floor, in score time, just in front of the terrain.
+  // Two bars in front of the land: the arrangement (verse, chorus: from the score, so in score time), and in
+  // front of it the time line, where the pins go.
+  const ARR_Z = DEPTH / 2 + 4.5, TIME_Z = DEPTH / 2 + 8;
+  const SEC_COLOR = { verse: '#6f86e8', chorus: '#e46fb4', bridge: '#f0a35e', intro: '#7fcfb0', outro: '#7fcfb0' };
   const secGroup = new T.Group(); scene.add(secGroup);
-  (D.sections || []).forEach((s, i) => {
+  (D.sections || []).forEach((s) => {
     if (s.start >= D.seconds) return;
     const x0 = xOfSec(s.start), x1 = xOfSec(Math.min(s.end, D.seconds));
-    const c = rampJS(0.3 + 0.6 * ((i * 0.37) % 1));
-    const m = new T.Mesh(new T.PlaneGeometry(Math.max(0.1, x1 - x0 - 0.4), 2.2),
-      new T.MeshBasicMaterial({ color: new T.Color(...c), transparent: true, opacity: 0.55, toneMapped: false }));
-    m.rotation.x = -Math.PI / 2; m.position.set((x0 + x1) / 2, 0.02, DEPTH / 2 + 5);
+    const m = new T.Mesh(new T.PlaneGeometry(Math.max(0.1, x1 - x0 - 0.5), 2.4),
+      new T.MeshBasicMaterial({ color: SEC_COLOR[s.label] || '#9aa6c4', transparent: true, opacity: 0.6, toneMapped: false }));
+    m.rotation.x = -Math.PI / 2; m.position.set((x0 + x1) / 2, 0.02, ARR_Z);
     secGroup.add(m);
   });
+  const timeBar = new T.Mesh(new T.PlaneGeometry(W, 1.1), new T.MeshBasicMaterial({ color: '#3a4d7a', toneMapped: false }));
+  timeBar.rotation.x = -Math.PI / 2; timeBar.position.set(0, 0.02, TIME_Z); scene.add(timeBar);
+  for (let t = 0; t <= D.seconds + 0.01; t += 10) {
+    const tick = new T.Mesh(new T.PlaneGeometry(0.35, t % 20 ? 1.6 : 2.4), new T.MeshBasicMaterial({ color: '#9fb2dc', toneMapped: false }));
+    tick.rotation.x = -Math.PI / 2; tick.position.set(xOfSec(t), 0.03, TIME_Z + 0.4); scene.add(tick);
+  }
 
   // --- labels ---------------------------------------------------------------------
   const L = EX.labels(st.host, camera);
-  for (let s = 0; s <= D.seconds + 0.01; s += 20) L.add(`${s}s`, new T.Vector3(xOfSec(s), 0, DEPTH / 2 + 9));
-  L.add('time →', new T.Vector3(W / 2 + 10, 0, DEPTH / 2 + 9), 'tick big');
+  for (let s = 0; s <= D.seconds + 0.01; s += 20) L.add(`${s}s`, new T.Vector3(xOfSec(s), 0, TIME_Z + 3));
+  L.add('time →', new T.Vector3(W / 2 + 10, 0, TIME_Z), 'tick big');
   PITCH.forEach(([name, lo, hi, color]) => {
     const z0 = zOfHz(lo), z1 = zOfHz(hi);
     const bar = new T.Mesh(new T.PlaneGeometry(3, Math.abs(z0 - z1) - 0.4), new T.MeshBasicMaterial({ color, transparent: true, opacity: 0.85, toneMapped: false }));
@@ -258,9 +268,11 @@
     const el = L.add(name, new T.Vector3(W / 2 + 8, 0, (z0 + z1) / 2), 'tick band').el;
     el.style.setProperty('--c', color);
   });
-  L.add('settling wall', new T.Vector3(wallX, 15, DEPTH / 2 + 2), 'tick big');
-  (D.sections || []).forEach((s) => { if (s.start < D.seconds) L.add(s.label, new T.Vector3(xOfSec(s.start) + 1, 0, DEPTH / 2 + 5), 'tick'); });
-  L.add('sections: score time', new T.Vector3(-W / 2 - 14, 0, DEPTH / 2 + 5), 'tick');
+  L.add(EX.g('settling', 'settling wall'), new T.Vector3(wallX, 15, DEPTH / 2 + 2), 'tick big');
+  (D.sections || []).forEach((s) => {
+    if (s.start < D.seconds) L.add(s.label, new T.Vector3((xOfSec(s.start) + xOfSec(Math.min(s.end, D.seconds))) / 2, 0.1, ARR_Z), 'tick arr');
+  });
+  L.add(`arrangement · ${EX.g('scoretime', 'score time')}`, new T.Vector3(-W / 2 - 3, 0, ARR_Z), 'tick side');
 
   // --- state ------------------------------------------------------------------------
   // Resolve's pace, seconds per step while the song plays from the top: the 32 steps finish a second before the
@@ -436,7 +448,7 @@
 
   // --- panel ---------------------------------------------------------------------------
   const $ = (id) => document.getElementById(id);
-  const MODES = ['ODE state', 'predicted final', 'finished take'];
+  const MODES = [EX.g('state', 'the state'), EX.g('predicted', 'the predicted final'), 'the finished song'];
   $('honest').title = `Every number and color here is computed from the decoded audio of this take. ${D.bands_note}. Audio: ${D.audio_note}.`;
 
   // ring
@@ -573,7 +585,7 @@
     const off = ui.mode === 2;
     Object.entries(anchors).forEach(([id, el]) => { el.hidden = off || !mine[id]; });
     const pts = off ? [] : CUES.filter((c) => mine[c.id]).map((c) => {
-      pv.set(xOfSec(mine[c.id].at), 0, DEPTH / 2 + 7).project(camera);
+      pv.set(xOfSec(mine[c.id].at), 0, TIME_Z).project(camera);
       const x = (pv.x + 1) / 2 * w, y = (1 - pv.y) / 2 * h;
       anchorFor(c).style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px)`;
       return { c, x, y };
@@ -670,6 +682,7 @@
   const hh = $('hoverhelp');
   hh.innerHTML = HELP_IDLE;
   $('panel').addEventListener('pointerover', (e) => {
+    if (e.target.closest('#hoverhelp')) return;
     const el = e.target.closest('[data-help]'); hh.innerHTML = el ? el.dataset.help : HELP_IDLE; hh.classList.toggle('on', !!el);
   });
   $('panel').addEventListener('pointerleave', () => { hh.innerHTML = HELP_IDLE; hh.classList.remove('on'); });
@@ -678,10 +691,10 @@
   const series = (set, fn) => D.metrics.map((m) => fn(m[set] || {}));
   const meanSettle = (arr, s) => { let t = 0; for (let b = 0; b < B; b++) t += arr[s * B + b]; return t / B / 255; };
   const METRICS = [
-    ['Waveform match', '<b>Waveform match</b> compares the actual sound wave at this step with the finished song\'s, moment by moment: 1 is identical, 0 unrelated. It stays low until late, because tiny timing differences count against it even when the song already sounds right.', (m) => m.correlation_final, (v) => v],
-    ['Latent match', '<b>Latent match</b> compares the model\'s own internal sketch of the song with its final sketch. It climbs early: the model settles what the song is well before the sound itself comes clean.', (m) => m.cosine_final, (v) => v],
+    ['Waveform match', '<b>Waveform match</b> compares the actual sound wave at this step with the finished song\'s, moment by moment: 1 is identical, 0 unrelated. It stays low until late, because tiny timing differences count against it even when the song already sounds right.<small class="tech">Pearson correlation of the samples with the final take\'s.</small>', (m) => m.correlation_final, (v) => v],
+    ['Latent match', '<b>Latent match</b> compares the model\'s own internal sketch of the song (its ' + EX.g('latent', 'latent') + ') with its final sketch. It climbs early: the model settles what the song is well before the sound itself comes clean.<small class="tech">Cosine similarity of the latent with the final latent.</small>', (m) => m.cosine_final, (v) => v],
     ['Band agreement', '<b>Band agreement</b> asks, for each pitch band, whether it gets louder and quieter at the same moments as the finished song. It shows the song\'s shape, its rhythm and sections, arriving before the detail. The map below shows it band by band.', null, (v) => v],
-    ['Brightness Hz', '<b>Brightness</b> is the average pitch of all the sound energy, in Hz. Static is bright and hissy, so it starts high and drifts toward the song\'s own brightness as the noise clears.', (m) => m.spectral_centroid_hz, (v) => v / 5000],
+    ['Brightness Hz', '<b>Brightness</b> is the average pitch of all the sound energy, in Hz. Static is bright and hissy, so it starts high and drifts toward the song\'s own brightness as the noise clears.<small class="tech">Mean over bands of the correlation of each band\'s energy envelope with the final take\'s.</small><small class="tech">Spectral centroid, Hz.</small>', (m) => m.spectral_centroid_hz, (v) => v / 5000],
   ];
   const metricEls = METRICS.map(([name, sub]) => {
     const d = document.createElement('div'); d.className = 'metric';
@@ -705,8 +718,8 @@
     const other = setName === 'state' ? 'predicted' : 'state';
     $('stepbig').innerHTML = `step ${s}`;
     $('ringnum').textContent = s;
-    const blurb = s === 0 ? 'the start: pure noise in the latent' : s === S ? 'the end: this state is the take' : `${Math.round(s / S * 100)}% of the way through the solve`;
-    $('stepsub').innerHTML = `${blurb}<br>showing <b style="color:#ffc2e3">${MODES[ui.mode]}</b>${m.t != null ? ` · t ${m.t.toFixed(2)}` : ''}`;
+    const blurb = s === 0 ? 'pure static: the start' : s === S ? 'the finished song' : `${Math.round(s / S * 100)}% of the way from static to song`;
+    $('stepsub').innerHTML = `${blurb}<br>showing <b style="color:#ffc2e3">${MODES[ui.mode]}</b>${m.t != null ? ` · ${EX.g('t', 't')} ${m.t.toFixed(2)}` : ''}`;
     $('arc').setAttribute('d', s ? arcPath(s) : '');
     const [kx, ky] = pt(ang(s), R); $('knob').setAttribute('cx', kx); $('knob').setAttribute('cy', ky);
     ringTicks.forEach((t, i) => t.setAttribute('stroke', i <= s ? rgbCss(i / S) : '#3a4a70'));
@@ -839,10 +852,11 @@
     const s = Math.round(ui.target), at = (arr, k) => arr[k * B * C + p.b * C + p.c] / 255;
     const [lo, hi] = D.range_log10, db = (v) => ((lo + v * (hi - lo)) * 10 - hi * 10).toFixed(0);
     uniforms.uHoverZ.value = bandZ[p.b];
-    tip.show(`<b>${fmt(p.sec)}</b> · ${Math.round(D.band_lo_hz[p.b])}–${Math.round(D.band_hi_hz[p.b])} Hz<br>
-      <span class="m">level at step ${s} (dB below the loudest cell):</span><br>
-      state ${db(at(state, s))} · predicted ${db(at(pred, s))} · finished ${db(at(state, S))}<br>
-      <span class="m">band envelope agreement with the take:</span> ${num(settleS[s * B + p.b] / 255, 2)} / ${num(settleP[s * B + p.b] / 255, 2)}<br>
+    const band = PITCH.find(([, lo, hi]) => D.band_lo_hz[p.b] < hi) || PITCH[PITCH.length - 1];
+    tip.show(`<b>${fmt(p.sec)}</b> into the song · <b>${band[0]}</b> <span class="m">(${Math.round(D.band_lo_hz[p.b])}–${Math.round(D.band_hi_hz[p.b])} Hz)</span><br>
+      <span class="m">loudness here at step ${s}, in dB below the loudest point:</span><br>
+      now ${db(at(state, s))} · predicted ${db(at(pred, s))} · finished ${db(at(state, S))}<br>
+      <span class="m">how closely it already moves like the finished song (1 = exactly):</span> ${num(settleS[s * B + p.b] / 255, 2)}<br>
       <span class="m">click to play from here</span>`, e.clientX, e.clientY);
   });
   st.canvas.addEventListener('pointerleave', () => { tip.hide(); uniforms.uHoverZ.value = -999; });

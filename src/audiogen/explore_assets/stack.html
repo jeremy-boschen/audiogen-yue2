@@ -12,16 +12,16 @@
 <div class="hero">
   <div class="kicker">Generation microscope · one song, four layers</div>
   <h1>The stack</h1>
-  <p>What the model wrote at each level, on one time axis: the <em>score</em> it planned, the <em>semantic tokens</em>
-     it sampled (25 per second), the <em>acoustic latent</em> the ODE solved, and the <em>audio</em> that came out.
-     Hover anywhere to light the same moment through every layer; click to hear that phrase.</p>
+  <p>Before there is any sound, the model writes the song down in layers, each built from the one above: a
+     <dfn data-g="score">score</dfn>, a rough draft in <dfn data-g="tokens">tokens</dfn>, a detailed
+     <dfn data-g="latent">sketch</dfn>, then the audio. Hover to light one moment through every layer; click to hear it.</p>
 </div>
 
 <aside class="panel right" id="panel">
   <h3>This moment <small id="beamtime"></small></h3>
   <div id="moment" class="note">Hover the layers.</div>
 
-  <h3>Generation replay <small>real clock from the run</small></h3>
+  <h3>How it was written <small>replayed at the real speed</small></h3>
   <div class="row">
     <button class="btn round primary" id="replay" title="Replay generation (P)">▶</button>
     <div style="flex:1">
@@ -34,9 +34,8 @@
   <h3>Phrases <small id="phrasecount"></small></h3>
   <div class="list" id="phrases"></div>
 
-  <div class="honest"><b>Score time is not audio time.</b> Phrase starts come from the ABC score's tempo, so they are
-    where the plan puts a phrase; the audio usually lands close, but nothing guarantees it. Notes/syllable is a count from
-    the score against a vowel-group syllable estimate, not a judgment of how it sings.</div>
+  <div class="honest"><b>Timings come from the sheet music.</b> Phrase starts are where the score puts them; the audio
+    usually lands close but can drift. Notes per syllable is counted from the score, not judged from the singing.</div>
   <div class="note" id="datanote" style="margin-top:8px"></div>
 </aside>
 

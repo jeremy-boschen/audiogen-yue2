@@ -33,6 +33,8 @@ kbd { font: 600 10.5px -apple-system, sans-serif; border: 1px solid var(--line);
                    background: rgba(60, 78, 120, .45); border: 1px solid rgba(190, 215, 255, .28); }
 .labels .tick.band { transform: translate(0, -50%); font: 600 10.5px -apple-system, sans-serif; color: #eef2fb;
                      padding-left: 7px; border-left: 3px solid var(--c); }
+.labels .tick.arr { font: 600 10.5px -apple-system, sans-serif; color: #fff; letter-spacing: .04em; text-shadow: 0 1px 4px rgba(10, 15, 28, .9); }
+.labels .tick.side { transform: translate(-100%, -50%); color: var(--muted); }
 .labels .tick.big { font: 600 11px -apple-system, sans-serif; letter-spacing: .14em; text-transform: uppercase; color: #dfe6f5; }
 .labels .tick.sec { font: 600 11px -apple-system, sans-serif; letter-spacing: .08em; color: #fff; padding: 2px 7px;
                     border-radius: 6px; background: rgba(13, 20, 36, .7); border: 1px solid rgba(155, 107, 255, .45); }
@@ -299,3 +301,14 @@ input[type=range] { width: 100%; accent-color: var(--pink); }
 .cuemark circle { fill: var(--c); opacity: .45; pointer-events: none; }
 .cuemark.reached circle { opacity: 1; filter: drop-shadow(0 0 3px var(--c)); }
 @media (prefers-reduced-motion: reduce) { .fly { transition: none; } .gamepill.enter, .pinanchor.landing { animation: none; } }
+
+/* glossary: a dotted term with a small card on hover, plain first, the technical line under it */
+dfn[data-g] { font-style: inherit; text-decoration: underline dotted rgba(201, 184, 255, .7); text-underline-offset: 3px; cursor: help; }
+.labels dfn[data-g], .hero dfn[data-g] { pointer-events: auto; }
+.gcard { position: fixed; z-index: 50; padding: 10px 12px; border-radius: 11px; font-size: 12px; line-height: 1.5; color: #d6dcef;
+         background: rgba(14, 21, 38, .97); border: 1px solid rgba(155, 107, 255, .45); box-shadow: 0 14px 40px rgba(0, 0, 0, .5);
+         pointer-events: none; opacity: 0; transform: translateY(4px); transition: opacity .12s, transform .12s; }
+.gcard.on { opacity: 1; transform: none; }
+.gcard b { color: #fff; margin-right: 2px; }
+.gcard small, .hoverhelp small.tech { display: block; margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--line-soft);
+               font: 11px/1.45 ui-monospace, 'SF Mono', monospace; color: var(--faint); }
