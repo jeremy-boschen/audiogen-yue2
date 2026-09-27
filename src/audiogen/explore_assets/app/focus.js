@@ -242,20 +242,23 @@
   // Two bars in front of the land: the arrangement (verse, chorus: from the score, so in score time), and in
   // front of it the time line, where the pins go.
   const ARR_Z = DEPTH / 2 + 4.5, TIME_Z = DEPTH / 2 + 8;
-  const SEC_COLOR = { verse: '#3d7bff', chorus: '#ff3da8', bridge: '#ff8a1f', intro: '#1fd6a0', outro: '#1fd6a0' };
+  const SEC_COLOR = { verse: '#8b6bff', chorus: '#ff9f4a', bridge: '#ff5fb4', intro: '#4f8cff', outro: '#4f8cff' };   // the land's own palette
   const secGroup = new T.Group(); scene.add(secGroup);
   (D.sections || []).forEach((s) => {
     if (s.start >= D.seconds) return;
     const x0 = xOfSec(s.start), x1 = xOfSec(Math.min(s.end, D.seconds));
     const m = new T.Mesh(new T.PlaneGeometry(Math.max(0.1, x1 - x0 - 0.5), 1.5),
-      new T.MeshBasicMaterial({ color: SEC_COLOR[s.label] || '#9aa6c4', transparent: true, opacity: 0.5, toneMapped: false }));
+      new T.MeshBasicMaterial({ color: new T.Color(SEC_COLOR[s.label] || '#9aa6c4').multiplyScalar(1.25), transparent: true, opacity: 0.8, toneMapped: false }));
     m.rotation.x = -Math.PI / 2; m.position.set((x0 + x1) / 2, 0.02, ARR_Z);
     secGroup.add(m);
   });
-  const timeBar = new T.Mesh(new T.PlaneGeometry(W, 1.6), new T.MeshBasicMaterial({ color: new T.Color('#9fe6ff').multiplyScalar(1.6), toneMapped: false }));
+  const timeGeo = new T.PlaneGeometry(W, 1.6, 64, 1), tpos = timeGeo.getAttribute('position'), tcol = [];
+  for (let i = 0; i < tpos.count; i++) { const c = rampJS(0.12 + 0.8 * (tpos.getX(i) / W + 0.5)); tcol.push(c[0] * 0.95, c[1] * 0.95, c[2] * 0.95); }
+  timeGeo.setAttribute('color', new T.Float32BufferAttribute(tcol, 3));    // the time line in the land's colors, start to end
+  const timeBar = new T.Mesh(timeGeo, new T.MeshBasicMaterial({ vertexColors: true, toneMapped: false }));
   timeBar.rotation.x = -Math.PI / 2; timeBar.position.set(0, 0.02, TIME_Z); scene.add(timeBar);
   for (let t = 0; t <= D.seconds + 0.01; t += 10) {
-    const tick = new T.Mesh(new T.PlaneGeometry(0.45, t % 20 ? 2.2 : 3.4), new T.MeshBasicMaterial({ color: new T.Color('#ffffff').multiplyScalar(1.5), toneMapped: false }));
+    const tick = new T.Mesh(new T.PlaneGeometry(0.45, t % 20 ? 2.2 : 3.4), new T.MeshBasicMaterial({ color: '#f4efff', toneMapped: false }));
     tick.rotation.x = -Math.PI / 2; tick.position.set(xOfSec(t), 0.03, TIME_Z + 0.9); scene.add(tick);
   }
 
@@ -933,7 +936,7 @@
       const v = ui.finT > 0.99 ? 1 : get(ui.mixT > 0.5 ? settleP : settleS);
       m4.makeScale(2.2, 0.3 + Math.max(0, v) * 13, bandGap); m4.setPosition(wallX, 0, bandZ[b]);
       wall.setMatrixAt(b, m4);
-      const c = rampJS(0.15 + 0.85 * Math.pow(Math.max(0, v), 1.5)); wall.setColorAt(b, col.setRGB(c[0] * 0.75, c[1] * 0.75, c[2] * 0.75));
+      const c = rampJS(0.1 + 0.9 * Math.max(0, v)), lift = 0.7 + 0.6 * Math.max(0, v); wall.setColorAt(b, col.setRGB(c[0] * lift, c[1] * lift, c[2] * lift));
       if (ui.bands) { const hb = bandOf(D.band_lo_hz[b]); wall.setColorAt(b, col.set(PITCH[hb][3]).multiplyScalar((0.35 + 0.65 * Math.max(0, v)) * (hoverBand < 0 || hoverBand === hb ? 1 : 0.4))); }
     }
     wall.instanceMatrix.needsUpdate = true; wall.instanceColor.needsUpdate = true;

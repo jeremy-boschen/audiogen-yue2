@@ -38,7 +38,7 @@ kbd { font: 600 10.5px -apple-system, sans-serif; border: 1px solid var(--line);
 .labels .tick.hzband span { color: var(--muted); font-weight: 500; }
 .labels .tick.hzband.hot { color: #fff; text-shadow: 0 0 10px var(--c); }
 .labels .tick.hzband.hot span { color: var(--c); }
-.labels .tick.tsec { font: 650 11.5px -apple-system, sans-serif; color: #e8f7ff; text-shadow: 0 0 8px rgba(143, 216, 255, .6), 0 1px 3px #0a0f1c; }
+.labels .tick.tsec { font: 650 11.5px -apple-system, sans-serif; color: #f1ecff; text-shadow: 0 1px 4px #0a0f1c; }
 .labels .tick.big { font: 600 11px -apple-system, sans-serif; letter-spacing: .14em; text-transform: uppercase; color: #dfe6f5; }
 .labels .tick.sec { font: 600 11px -apple-system, sans-serif; letter-spacing: .08em; color: #fff; padding: 2px 7px;
                     border-radius: 6px; background: rgba(13, 20, 36, .7); border: 1px solid rgba(155, 107, 255, .45); }
@@ -276,7 +276,7 @@ input[type=range] { width: 100%; accent-color: var(--pink); }
 .panel.compact { display: flex; flex-direction: column; }
 .panel.compact > * { flex-shrink: 0; }
 .panel.compact #markbtn { align-self: flex-start; }
-.hoverhelp { margin-top: auto; padding: 12px 2px 0; min-height: 132px; border-top: 1px solid var(--line-soft);
+.hoverhelp { margin-top: 12px; padding: 10px 12px; min-height: 132px; border-radius: 10px; background: rgba(10, 15, 28, .35);
              color: var(--faint); font-size: 12px; line-height: 1.5; }
 .hoverhelp.on { color: #c9d2e3; }
 .hoverhelp b { color: var(--text); font-weight: 600; }
