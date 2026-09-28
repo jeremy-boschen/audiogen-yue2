@@ -710,7 +710,7 @@
     }
     let svg = '';
     laid.forEach((g) => {
-      const top = Math.max(floor - g.gh, g.jy + 22);
+      const top = Math.min(g.jy + 36, floor - g.gh);    // a short lead just under its marks, never down into the buttons
       g.el.style.transform = `translate(${g.x.toFixed(1)}px, ${top.toFixed(1)}px)`;
       const rows = [...g.el.children];
       g.cl.forEach((p, r) => {                      // each part's own line, ending at its own row's dot
