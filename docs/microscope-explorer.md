@@ -242,11 +242,11 @@ allows 1 GB): it keeps 125 MB of binaries out of the site repo and serves them f
 3. **Pages to GitHub:** copy everything in `00_publish/` except `media/` and dot-folders into repo
    `newty-coffee/www` under `yue2-microscope/`, then commit and push to `main`. GitHub Pages
    serves it at `https://www.newty.coffee/yue2-microscope/`.
-4. **Check the live site** in Chromium and WebKit with playwright (from
-   `~/dev/projects/audiogen/web`, where playwright is installed): pages load, audio plays and
-   seeks, and there are no console errors.
+4. **Check the live site:** `EXPLORER_URL=https://www.newty.coffee/yue2-microscope/ npm run test:pages`
+   runs the page suite against it in Chromium and WebKit: pages load without errors (Cloudflare's
+   injected analytics beacon aside), audio plays, and nothing draws while nothing moves.
 
-Live since 2026-09-27: https://www.newty.coffee/yue2-microscope/ (www commit 39b7741), with its 132
+Live since 2026-09-27: https://www.newty.coffee/yue2-microscope/ (www commit 39b7741; the idle-drawing fix is b96b374, 2026-09-28), with its 132
 audio files under `newty-media/yue2-microscope/`. The upload used one `wrangler r2 object put` per file
 with `--content-type audio/mp4`, eight at a time. Files from earlier builds are never deleted
 automatically; the names are content hashes, so new builds upload alongside them.
@@ -257,6 +257,15 @@ automatically; the names are content hashes, so new builds upload alongside them
 .venv/bin/python -m pytest -q        # includes tests/test_explore.py
 ```
 
-The tests cover the Python builders only. There is no committed browser test suite: the page code
-has been checked by hand, building both targets and driving them with playwright (screenshots,
-frame-by-frame position traces, console errors, throttled downloads).
+The Python tests cover the builders. The pages have a browser suite of their own:
+
+```
+npm install                           # once: Playwright 1.63, the version the Soundroom uses
+npm run test:pages                    # rebuilds with `explore.py all`, serves with `serve --no-open`, drives Chromium
+```
+
+`tests/pages/explorer.spec.ts` counts WebGL draw calls (wrapped before any page script runs) to hold the
+pages to drawing only while something moves: each page opens without errors, stops drawing when left alone,
+wakes on input and goes quiet again, keeps drawing while its audio plays (including sound that starts after
+its download), and the map's ambient turn runs only while its window has focus. It needs this machine's
+microscope runs, since it builds from them.

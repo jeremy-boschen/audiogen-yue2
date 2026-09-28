@@ -51,3 +51,8 @@ songs/cheap_arcade
 
 # Open work, kept local
 NEXT.md
+
+# Page tests
+node_modules/
+test-results/
+playwright-report/

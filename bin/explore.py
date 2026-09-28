@@ -299,7 +299,8 @@ def cmd_serve(args):
     server = http.server.ThreadingHTTPServer(("127.0.0.1", args.port), handler)
     url = f"http://127.0.0.1:{args.port}/{args.out.name}/index.html"
     print("serving", root, "at", url, flush=True)
-    webbrowser.open(url)
+    if not args.no_open:
+        webbrowser.open(url)
     server.serve_forever()
 
 
@@ -311,7 +312,9 @@ def main():
     sub.add_parser("stack").add_argument("run")
     sub.add_parser("map").add_argument("roots", nargs="+")
     sub.add_parser("all")
-    sub.add_parser("serve").add_argument("--port", type=int, default=8771)
+    serve = sub.add_parser("serve")
+    serve.add_argument("--port", type=int, default=8771)
+    serve.add_argument("--no-open", action="store_true", help="serve without opening a browser (the page tests use this)")
     publish = sub.add_parser("publish", help="one take's focus and stack views as a site for the web")
     publish.add_argument("run", nargs="?", default=str(DEFAULT_RUN))
     publish.add_argument("--title", help="the song's name; required unless publishing the default run")

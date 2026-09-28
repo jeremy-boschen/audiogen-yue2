@@ -1,0 +1,11 @@
+{
+  "name": "audiogen-explorer-tests",
+  "private": true,
+  "description": "Browser tests for the microscope explorer pages (src/audiogen/explore_assets).",
+  "scripts": {
+    "test:pages": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0"
+  }
+}
