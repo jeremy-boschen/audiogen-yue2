@@ -265,8 +265,13 @@
 
   // Settling wall: one bar per band at the left edge, height = envelope correlation at this step.
   const wallGeo = new T.BoxGeometry(1, 1, 1); wallGeo.translate(0, 0.5, 0);
-  const wall = new T.InstancedMesh(wallGeo, new T.MeshBasicMaterial({ toneMapped: false }), B);
-  scene.add(wall);
+  // Semi-transparent so the land shows through it, like one pane of tinted glass. Seen at an angle the bars
+  // stack dozens of faces deep, and half-opacity compounded that many times is opaque, so a depth-only pass
+  // draws first and the colored pass then paints only the nearest face of each bar, once.
+  const wall = new T.InstancedMesh(wallGeo, new T.MeshBasicMaterial({ toneMapped: false, transparent: true, opacity: 0.5, depthWrite: false }), B);
+  const wallDepth = new T.InstancedMesh(wallGeo, new T.MeshBasicMaterial({ colorWrite: false, transparent: true }), B);
+  wallDepth.instanceMatrix = wall.instanceMatrix; wallDepth.renderOrder = 1; wall.renderOrder = 2;
+  scene.add(wallDepth, wall);
   const wallX = -W / 2 - 6, m4 = new T.Matrix4(), col = new T.Color();
   const bandGap = DEPTH / B * 0.8;
 
