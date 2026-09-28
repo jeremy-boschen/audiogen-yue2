@@ -86,36 +86,61 @@
       camera.aspect = w / Math.max(1, h);
       camera.updateProjectionMatrix();
     }
-    new ResizeObserver(resize).observe(host);
+    new ResizeObserver(() => { resize(); wake(); }).observe(host);
     resize();
 
-    // ?timer drives frames from a timer and ignores visibility: for automated checks of a background tab only.
+    // ?timer drives frames from a timer and ignores visibility and idleness: for automated checks of a background tab only.
     const timer = new URLSearchParams(location.search).has('timer');
     const next = timer ? (f) => setTimeout(() => f(performance.now()), 33) : requestAnimationFrame;
     let onScreen = true, running = false, last = performance.now();
+    // Frames are drawn only while something moves. A visible window keeps its
+    // animation frames even without focus, and the bloom pass at full pixel
+    // ratio every frame held a core and the GPU for hours on a page nobody was
+    // using. A hook returns true while it is busy (audio playing, an intro, a
+    // replay); input keeps the page awake long enough for damping and fades to
+    // settle. Otherwise the loop stops and the last frame stays on screen.
+    const SETTLE_MS = 2500;
+    let awakeUntil = performance.now() + SETTLE_MS;
     const hooks = [];
     function draw(now) {
       const dt = Math.min(0.1, (now - last) / 1000);
       last = now;
-      for (const h of hooks) h(dt, now / 1000);
-      controls.update();
+      let busy = false;
+      for (const h of hooks) busy = h(dt, now / 1000) === true || busy;
+      // Auto-rotation is ambient: it turns only while the window has focus.
+      const spin = controls.autoRotate, focused = document.hasFocus();
+      controls.autoRotate = spin && focused;
+      busy = controls.update() || controls.autoRotate || busy;
+      controls.autoRotate = spin;
       composer.render();
+      return busy;
     }
     function frame(now) {
       if (!running) return;
-      draw(now);
+      if (draw(now)) awakeUntil = Math.max(awakeUntil, performance.now() + 300);
+      if (!timer && performance.now() > awakeUntil) { running = false; return; }
       next(frame);
     }
     function sync() {
-      const want = timer || (onScreen && !document.hidden);
+      const want = timer || (onScreen && !document.hidden && performance.now() <= awakeUntil);
       if (want && !running) { running = true; last = performance.now(); next(frame); }
       if (!want) running = false;
     }
-    document.addEventListener('visibilitychange', sync);
-    new IntersectionObserver((entries) => { onScreen = entries[0].isIntersecting; sync(); }).observe(canvas);
+    /** Keep drawing for a while: something changed, or is about to. */
+    function wake(ms = SETTLE_MS) {
+      awakeUntil = Math.max(awakeUntil, performance.now() + ms);
+      sync();
+    }
+    for (const type of ['pointerdown', 'pointermove', 'wheel', 'keydown', 'touchstart']) {
+      window.addEventListener(type, () => wake(), {passive: true});
+    }
+    document.addEventListener('play', () => wake(), true);
+    window.addEventListener('focus', () => wake());   // media events do not bubble; capture sees them
+    document.addEventListener('visibilitychange', () => (document.hidden ? sync() : wake()));
+    new IntersectionObserver((entries) => { onScreen = entries[0].isIntersecting; onScreen ? wake() : sync(); }).observe(canvas);
     sync();
 
-    return { renderer, scene, camera, controls, composer, bloomPass, canvas, host,
+    return { renderer, scene, camera, controls, composer, bloomPass, canvas, host, wake,
              onFrame: (fn) => hooks.push(fn), renderOnce: () => draw(performance.now()),
              get running() { return running; } };
   }

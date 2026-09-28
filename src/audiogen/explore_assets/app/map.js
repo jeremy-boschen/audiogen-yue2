@@ -188,6 +188,7 @@
     pu.uPlaying.value = el && !el.paused ? 1 : 0;
     $('ptime').textContent = el ? `${fmt(el.currentTime)} / ${fmt(el.duration)}` : '';
     L.update();
+    return !!el && !el.paused;              // busy while playing; idle, the page stops drawing
   });
   st.renderOnce();
 })();

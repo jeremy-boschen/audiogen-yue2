@@ -306,6 +306,7 @@
         source = ctx.createBufferSource(); source.buffer = buffer; source.connect(ctx.destination);
         source.onended = () => { source = null; };
         startedAt = ctx.currentTime; source.start(0, Math.min(t, buffer.duration));
+        st.wake();                                            // it may start well after the click, once loaded
       },
       ask: 0,
     };
@@ -457,6 +458,7 @@
     if (!player.paused) setBeam(player.currentTime, phraseAt(player.currentTime));
     if (intro < 1) { intro = Math.min(1, intro + dt * 0.3); camera.position.lerpVectors(introFrom, home.pos, 1 - Math.pow(1 - intro, 3)); }
     L.update();
+    return replaying || !player.paused || intro < 1;   // busy; idle, the page stops drawing
   });
   applyGen(GEN_END);
   st.renderOnce();

@@ -495,7 +495,7 @@
       master.gain.cancelScheduledValues(now);
       master.gain.setValueAtTime(0.001, now);
       master.gain.exponentialRampToValueAtTime(1, now + 0.05 + SWELL);
-      playing = true; ui.playing = true;
+      playing = true; ui.playing = true; st.wake();      // it may start well after the click, once downloaded
       sound(Math.round(ui.target));
     }
     function pause() {
@@ -1017,6 +1017,7 @@
       camera.position.lerpVectors(new T.Vector3(-190, 150, 240), home.pos, e);
     }
     L.update();
+    return ui.playing || ui.animating || intro < 1;    // busy; idle, the page stops drawing
   });
 
   renderPanel();
