@@ -69,7 +69,7 @@ three.js is vendored under `explore_assets/vendor/three/`; nothing loads from a 
   (`settle_state`, `settle_predicted`). Unsettled land is frost teal (`FROST` in the fragment
   shader) and blends toward the color that spot has in the finished song as its band settles. It is a
   comparison with the end result, per band and across the whole song, not a per-spot or per-instrument reading.
-- **Ghost:** the other view, drawn as contour lines above the land.
+- **Ghost:** the other view, drawn as contour lines on the land, glowing only where the two views differ.
 - **Settling wall:** one bar per band at the left edge, showing the same correlation.
 - **Hz bands:** `PITCH` holds five named bands (bass, body, voice & lead, bite, air), each with
   a color and plain and technical text.

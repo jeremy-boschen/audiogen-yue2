@@ -214,7 +214,10 @@
   const terrain = new T.Mesh(geo, terrainMat);
   scene.add(terrain);
 
-  // Ghost: the counterpart (predicted over state, state over predicted) as glowing contour lines per band.
+  // Ghost: the counterpart (predicted over state, state over predicted) as contour lines per band, drawn on the
+  // land itself rather than lifted above it. Each line glows by how far it stands from the surface under it, so
+  // where the two views agree it sinks into the land and vanishes, and at the last step, where they are the same
+  // song, it is gone. A lifted copy never lined up with the land under perspective, so its shapes misled.
   const lineIdx = [];
   for (let b = 0; b < B; b += 2) for (let c = 0; c < C - 1; c++) lineIdx.push(b * C + c, b * C + c + 1);
   const ghostGeo = new T.BufferGeometry();
@@ -222,11 +225,17 @@
   ghostGeo.setAttribute('aUV', geo.getAttribute('aUV'));
   ghostGeo.setIndex(lineIdx);
   ghostGeo.boundingSphere = geo.boundingSphere;
-  const ghostUniforms = Object.assign({}, uniforms, { uLift: { value: 7 }, uGhostMix: { value: 1 }, uAlpha: { value: 0.5 }, uFin: { value: 0 } });
+  const ghostUniforms = Object.assign({}, uniforms, { uLift: { value: 0.04 }, uGhostMix: { value: 1 }, uAlpha: { value: 0.5 }, uFin: { value: 0 }, uLandFin: uniforms.uFin });
   const ghost = new T.LineSegments(ghostGeo, new T.ShaderMaterial({
     uniforms: ghostUniforms, transparent: true, depthWrite: false, blending: T.AdditiveBlending,
-    vertexShader: VERT_COMMON + `void main(){ terrain(uGhostMix); }`,
-    fragmentShader: FRAG_COMMON + `void main(){ vec3 c = shade(true); gl_FragColor = vec4(c * 0.9 + vec3(0.08,0.05,0.14), uAlpha * (0.35 + vH * 0.9)); }`,
+    vertexShader: VERT_COMMON + `uniform float uLandFin; varying float vGap;
+      void main(){
+        terrain(uGhostMix);
+        float land = mix(hAt(aUV, uMix), texture(uState, vec3(aUV, uSteps)).r, uLandFin);
+        vGap = abs(shape(hAt(aUV, uGhostMix)) - shape(land));
+      }`,
+    fragmentShader: FRAG_COMMON + `varying float vGap;
+      void main(){ vec3 c = shade(true); gl_FragColor = vec4(c * 0.9 + vec3(0.08,0.05,0.14), uAlpha * smoothstep(0.08, 0.9, vGap) * (0.5 + vH * 0.9)); }`,
   }));
   scene.add(ghost);
 
@@ -989,7 +998,7 @@
     blockEdges.material.opacity = blockMat.opacity * 4; block.visible = blockMat.opacity > 0.004;
     uniforms.uTime.value = reduced ? 0 : now;
     ghostUniforms.uGhostMix.value = ui.mode === 1 ? 0 : 1;
-    ghostUniforms.uAlpha.value += ((ui.ghost ? 0.3 : 0) - ghostUniforms.uAlpha.value) * k;
+    ghostUniforms.uAlpha.value += ((ui.ghost ? 0.6 : 0) - ghostUniforms.uAlpha.value) * k;
     ghost.visible = ghostUniforms.uAlpha.value > 0.01;
 
     audio.tick();
