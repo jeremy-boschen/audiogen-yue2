@@ -770,15 +770,30 @@
   $('markbtn').hidden = !LOCAL;
   $('markbtn').onclick = () => { marking = !marking; $('markbtn').classList.toggle('on', marking); drawMarker(); };
 
-  // Hover help: the panel's controls describe themselves in the space at its foot, not in tooltips.
+  // Hover help: the panel's controls describe themselves at its foot, not in tooltips. The foot holds one idle line;
+  // the explanation is a card laid over the panel, so a long one never makes the panel scroll. It opens where the
+  // idle line is when there is room below, rises from the panel's bottom edge when there is not, and moves to the
+  // top if that would cover the thing being explained.
   const HELP_IDLE = 'Point at anything in this panel and it is explained here.';
-  const hh = $('hoverhelp');
+  const hh = $('hoverhelp'), card = $('helpcardfloat'), panel = $('panel');
   hh.innerHTML = HELP_IDLE;
-  $('panel').addEventListener('pointerover', (e) => {
-    if (e.target.closest('#hoverhelp')) return;
-    const el = e.target.closest('[data-help]'); hh.innerHTML = el ? el.dataset.help : HELP_IDLE; hh.classList.toggle('on', !!el);
+  const hideHelp = () => card.classList.remove('on');
+  panel.addEventListener('pointerover', (e) => {
+    const el = e.target.closest('[data-help]');
+    if (!el) { hideHelp(); return; }
+    card.innerHTML = el.dataset.help;
+    // Laid exactly over the panel's contents, whichever layout the window has put the panel in.
+    const box = panel.getBoundingClientRect(), cs = getComputedStyle(panel), foot = hh.getBoundingClientRect();
+    const padT = parseFloat(cs.paddingTop), padB = parseFloat(cs.paddingBottom);
+    card.style.left = `${foot.left}px`; card.style.width = `${foot.width}px`;
+    const at = el.getBoundingClientRect(), height = card.offsetHeight, first = box.top + panel.clientTop + padT;
+    let top = Math.min(foot.top, box.top + panel.clientTop + panel.clientHeight - padB - height);
+    if (at.bottom > top && at.top < top + height) top = first;
+    card.style.top = `${Math.max(first, top)}px`;
+    card.classList.add('on');
   });
-  $('panel').addEventListener('pointerleave', () => { hh.innerHTML = HELP_IDLE; hh.classList.remove('on'); });
+  panel.addEventListener('pointerleave', hideHelp);
+  panel.addEventListener('scroll', hideHelp, { passive: true });
 
   // metrics
   const series = (set, fn) => D.metrics.map((m) => fn(m[set] || {}));

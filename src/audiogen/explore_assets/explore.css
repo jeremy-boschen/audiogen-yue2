@@ -286,9 +286,14 @@ input[type=range] { width: 100%; accent-color: var(--pink); }
 .panel.compact { display: flex; flex-direction: column; }
 .panel.compact > * { flex-shrink: 0; }
 .panel.compact #markbtn { align-self: flex-start; }
-.hoverhelp { margin-top: 12px; padding: 10px 12px; min-height: 132px; border-radius: 10px; background: rgba(10, 15, 28, .35);
+.hoverhelp { margin-top: 12px; padding: 10px 12px; border-radius: 10px; background: rgba(10, 15, 28, .35);
              color: var(--faint); font-size: 12px; line-height: 1.5; }
 .hoverhelp.on { color: #c9d2e3; }
+/* The explanation card, laid over the panel's contents; focus.js places and sizes it. */
+.helpfloat { position: fixed; box-sizing: border-box; margin: 0; z-index: 12; color: #c9d2e3;
+             background: rgba(12, 18, 33, .97); border: 1px solid rgba(58, 78, 120, .6); box-shadow: 0 12px 36px rgba(0, 0, 0, .5);
+             pointer-events: none; visibility: hidden; }
+.helpfloat.on { visibility: visible; }
 .hoverhelp b { color: var(--text); font-weight: 600; }
 .hoverhelp kbd { font-size: 9.5px; padding: 0 5px; }
 .panel.compact { padding-bottom: 12px; }

@@ -63,8 +63,9 @@
   <canvas id="settlemap" data-help="<b>Similarity to the final step, by Hz band.</b> Each row is a frequency band, bass at the bottom and air at the top; each column is a step. Brighter means that band's rise and fall across the song is more like the final step's. A tick marks the step after which it stays at 0.9 or above; the band can still change after that. The order differs from take to take. Click to jump to a step.&lt;small class=&quot;tech&quot;&gt;Per-band envelope correlation with step 32's; ticks where it stays at 0.9 or above, a cut-off this page chose.&lt;/small&gt;"></canvas>
 
   <div class="honest" id="honest" data-help="<b>What these numbers can and can't say.</b> These are measurements of this take's saved latent states and decoded audio. It shows where the signal changes, not what a person hears. Whether you can make out a voice at a step is for your ears, which is what the <b>I hear</b> buttons are for. Preview levels are adjusted for playback (each file to the same peak), so some steps may sound louder than others; web audio is AAC. The numbers come from the original audio and latents."><b>Signal statistics, not listening results.</b> Whether you can hear a voice at a step is for your ears. Preview levels are adjusted for playback; some steps may sound louder.</div>
-  <div class="hoverhelp" id="hoverhelp" aria-live="polite"></div>
+  <div class="hoverhelp" id="hoverhelp"></div>
 </aside>
+<div class="hoverhelp helpfloat" id="helpcardfloat" aria-live="polite"></div>
 
 <div class="panel dock" id="dock">
   <div class="time" id="time">0:00.0</div>
