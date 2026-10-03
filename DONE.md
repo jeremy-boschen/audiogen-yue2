@@ -2,6 +2,22 @@
 
 Measurements and what they ruled out. Git log has the what; this keeps the numbers.
 
+## 2026-10-03 — stack fingerprint (audiogen.fingerprint)
+
+Replaces the comfyui profile's exact macOS/chip/torch/mtlflashattn pins: those are now
+recorded, and a probe says whether a stack computes the same bytes. M5 Pro, macOS 27.0.1.
+
+- **Cost:** 13.0 s first run with model load, 9.4 s again; lookup of a measured stack 0.035 s,
+  no torch or numpy. The studio measures once per stack key, on the first take.
+- **Repeatable:** two fresh processes, same hash b3714038df90ee61.
+- **Covers the Metal kernels:** metal_eligible is False at 900 positions, True at 1500 and
+  4200, for both AR decode and NAR; the probe runs all three lengths.
+- **Sensitive:** the official profile on the same machine gives 4fad12d7e9af9b7b, differing in
+  rms_norm, rms_norm_head, ar/nar at 1500 and 4200, semantic, latent and pcm; 900 and the
+  causal prefill stay equal (stock SDPA in both).
+- **Inert:** a 200-token take rendered after the probe in the same worker and without it:
+  semantic 90d50cc8534d2375, latent 70e67baf32694cd3, FLAC 15aaf86f4cd784b4, both.
+
 ## 2026-09-26 — generation microscope, first milestone
 
 Fixture: Burn It Down, seed 777, 200 s, `bin/microscope.py capture` in `.venv-dev`
