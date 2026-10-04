@@ -35,7 +35,14 @@ class Pipe:
         self.events.append(("synthesize", list(semantic.tokens)))
         return np.zeros((len(semantic.tokens), 64), np.float32)
 
+    _vae = None
+
     def decode(self, latents):
+        # Like YuE2Pipeline.decode: loads the decoder once and keeps it.
+        self.decoders = getattr(self, "decoders", [])
+        if self._vae is None:
+            self._vae = object()
+        self.decoders.append(self._vae)
         self.events.append(("decode", len(latents)))
         return np.zeros((len(latents) * 1920, 2), np.float32)
 
@@ -68,6 +75,21 @@ def test_a_preview_voices_the_tokens_so_far_then_hands_the_model_back(plain):
     assert pipe.events[i + 1:i + 4] == [("decode", 4), ("boundary",), ("load", False)]
     assert heard == [(4 * 1920, 4 / 25)]
     assert pipe.events[-2:] == [("synthesize", [5, 6, 7, 8]), ("decode", 4)]   # the take itself
+
+
+def test_the_take_decodes_with_its_own_decoder_not_one_a_preview_loaded(plain):
+    # Loaded inside the token loop's inference mode, the preview's decoder breaks the
+    # take's decode after it; the take must load a fresh one.
+    song, step = plain
+    pipe = Pipe()
+    render.render_step(pipe, song, step, preview=render.Preview(lambda: True, lambda *a: None, every=2))
+    previews, take = pipe.decoders[:-1], pipe.decoders[-1]
+    assert len(previews) == 2 and take not in previews
+    # A decoder loaded before the loop is kept: a preview does not spoil it.
+    pipe = Pipe()
+    pipe._vae = loaded = object()
+    render.render_step(pipe, song, step, preview=render.Preview(lambda: True, lambda *a: None, every=2))
+    assert pipe.decoders == [loaded, loaded, loaded]
 
 
 def test_a_request_before_the_minimum_waits_for_it(plain):

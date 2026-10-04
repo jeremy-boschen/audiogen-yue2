@@ -252,10 +252,18 @@ def preview_so_far(pipe, plan, tokens: list[int], step: Step, known_latents=None
     """Voice and decode ``tokens`` (the song so far), then hand the model back to the AR stage."""
     from yue2.pipeline import SemanticResult
     known = None if known_latents is None else np.asarray(known_latents)[:len(tokens)]
+    decoder_loaded = getattr(pipe, "_vae", None) is not None
     latents = pipe.synthesize(SemanticResult(plan, list(tokens), {}, False), known_latents=known,
                               blend_seconds=step.blend_seconds if known is not None else 0.0,
                               chunk_seconds=step.chunk_seconds, overlap_seconds=step.overlap_seconds)
     audio = np.asarray(pipe.decode(latents), np.float32)
+    if not decoder_loaded and hasattr(pipe, "_vae"):
+        # A decoder first loaded here, inside the token loop's inference mode, has
+        # inference-tensor weights, and the take's own decode after the loop then
+        # fails on them: "Inference tensors do not track version counter" (two
+        # takes lost, 2026-09-26 and -29). The take loads its own instead (~0.5 s).
+        # One loaded beforehand survives a preview (checked on the real VAE, MPS).
+        pipe._vae = None
     pipe._stage_boundary()
     pipe._load_model(for_nar=False)          # re-fires on_model_ready for AR: LoRA back to its AR state
     return audio
