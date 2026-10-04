@@ -167,3 +167,23 @@ The idea was to run the sound stage for a preview on the CPU while the GPU keeps
 - bf16: 62.8 s and 100.7 s.
 
 It would also hold a second, 13.6 GB fp32 copy of the model. Apple Silicon has no GPU partitioning, so two GPU jobs only take turns. Listen-so-far pauses on the GPU instead.
+
+## Several takes at once on MPS (2026-09-30)
+
+`bin/bench_batch.py`: the writing step as the studio runs it (MPS, comfyui-yue2-mps-v1, bf16), with random
+codes in a cache of 1,500 or 5,000, 150 timed steps. Milliseconds per step; codes per second in all.
+
+| cache | 1 take | 1 take, sampled on GPU | 2 at once | 4 at once | 8 at once |
+|---|---|---|---|---|---|
+| 1,500 | 29.7 ms · 33.7/s | 23.9 ms · 41.9/s | 34.2 ms · 58.4/s | 42.9 ms · 93.2/s | 60.8 ms · 131.5/s |
+| 5,000 | 49.1 ms · 20.4/s | 43.2 ms · 23.2/s | 63.1 ms · 31.7/s | 95.1 ms · 42.0/s | 147.3 ms · 54.3/s |
+
+- Two at once costs 1.15-1.3x one: guidance's two branches in one pass would make a guided take 1.55-1.7x faster.
+- Four at once gives 2.1-2.8x the codes; eight 2.7-3.9x. The gain shrinks as the song grows.
+- Sampling on the CPU (as now, one read-back per code) costs ~6 ms a step.
+- One take slows from 24 to 43 ms between a 1,500 and a 5,000 cache. Reading 5,000 cached codes is
+  ~0.6 GB, about 2 ms at this Mac's bandwidth, so the attention step, not memory, is most of that.
+- The sampling rules are cheap: `distribution()` 0.8 ms and a CPU draw with it 2.5 ms a code
+  (MPS, 184,704 codes, top-k 100, top-p 0.95, penalty window 50). The studio's loop runs 21.5/s near
+  the start of a take against 33.7/s here; the rest of that gap is not explained yet (a longer real
+  prefix, or per-code callbacks, are guesses).
