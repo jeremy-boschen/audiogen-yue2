@@ -16,7 +16,7 @@ from pathlib import Path
 
 import numpy as np
 
-from . import hashes, lora, shims
+from . import hashes, lora
 from .song import PIPELINE_KEYS, Song, Step, seconds_to_tokens
 
 SAMPLE_RATE = 48000
@@ -57,27 +57,33 @@ def build_pipeline(models: Path, song: Song, *, progress: bool = True):
     from yue2.pipeline import YuE2Pipeline
     from yue2.protocol import GenerationConfig
 
-    if shims.active():
-        raise ValueError("Production rendering requires an engine profile; restart without experimental shims")
-    config = GenerationConfig(**song.generation_config)
-    # The ComfyUI album ran behind three launch flags that changed the audio and
-    # were written down nowhere. The engine's equivalents are constructor
-    # arguments, so they belong in the manifest where they are read back with
-    # the take rather than typed at a shell.
     unknown = set(song.pipeline) - PIPELINE_KEYS
     if unknown:
         raise ValueError(f"unknown pipeline keys {sorted(unknown)}; known: {sorted(PIPELINE_KEYS)}")
     import torch
     options = dict(song.pipeline)
-    # Explicit user selection wins; preserve the validated MPS default for songs.
+    # An explicit profile wins over the device-specific default.
     if "profile" not in options:
         device = options.get("device", "auto")
         is_mps = device == "mps" or (device == "auto" and not torch.cuda.is_available()
                                       and torch.backends.mps.is_available())
         options["profile"] = "comfyui-yue2-mps-v1" if is_mps else "official"
+    if "backend" not in options and not flash_attention_built(torch):
+        # The CUDA-graph decode path calls aten::_flash_attention_forward
+        # directly, and PyTorch's own Windows wheels are built without
+        # FlashAttention -- so it does not fail to be fast, it raises
+        # "USE_FLASH_ATTENTION was not enabled for build" partway into the
+        # first step. torch-eager takes the other path, which goes through
+        # scaled_dot_product_attention and falls back on its own.
+        #
+        # Probed, not assumed from the platform: a torch built WITH flash on
+        # Windows should keep the graphs. And is_flash_attention_available is
+        # the right probe -- flash_sdp_enabled() returns True here, because it
+        # reports which SDP backend is preferred, not what was compiled in.
+        options["backend"] = "torch-eager"
+    config = GenerationConfig(**fit_generation_config(song, options["profile"]))
     pipe = YuE2Pipeline(Path(models) / "YuE2-3B", Path(models) / "YuE2-Vae",
                         generation_config=config, progress=progress, **options)
-    pipe.audiogen_numerics = pipe.profile.name if pipe.profile.name != "official" else None
     adapters = lora.from_manifest(song.lora)
     if adapters:
         # Attached through the engine's hook rather than by patching pipe._model:
@@ -85,6 +91,63 @@ def build_pipeline(models: Path, song: Song, *, progress: bool = True):
         # applied once from outside is silently dropped.
         pipe.on_model_ready.append(lora.hook(adapters))
     return pipe
+
+
+def flash_attention_built(torch) -> bool:
+    """Whether this torch can run aten::_flash_attention_forward at all.
+
+    True off CUDA: the question is only asked to decide whether the CUDA graph
+    path is safe, and nothing else reaches it.
+    """
+    if not torch.cuda.is_available():
+        return True
+    probe = getattr(torch.backends.cuda, "is_flash_attention_available", None)
+    return True if probe is None else bool(probe())
+
+
+def fit_generation_config(song: Song, profile_name: str) -> dict:
+    """Refuse what the profile cannot do; quietly fix what does not matter.
+
+    Two different things get confused here, so they are separated.
+
+    A carry chain is a real capability. Only 'comfyui-yue2-mps-v1' supports it
+    and that profile hard-requires Apple Silicon, so on a CUDA box the chain is
+    impossible, permanently, and the honest answer is no. The engine does refuse
+    it too -- but inside validate_continuation, which is reached on the SECOND
+    step, so the song renders its first step, spends the GPU minutes, and only
+    then says no. And it says the profile does not support continuation, which
+    is true and unhelpful: the reader did not pick the profile, the machine did.
+
+    `rng_device` is not a capability. It decides which device draws the sampling
+    noise, and 'official' insists on 'auto'. Every song here was written on the
+    Mac with 'cpu', and refusing them all would be pedantry: the seeds do not
+    reproduce across the two machines anyway -- different profile, different
+    kernels, different hardware. So it is coerced and said out loud, rather than
+    thrown back at someone who cannot do anything about it.
+    """
+    from yue2.profiles import resolve_profile
+
+    profile = resolve_profile(profile_name)
+    if profile.supports_continuation:
+        return dict(song.generation_config)
+
+    carried = [step.id for step in song.steps if step.carry_from is not None]
+    if carried:
+        raise ValueError(
+            f"this song grows step {carried[0]!r} out of an earlier one, and the "
+            f"{profile.name!r} profile cannot continue a take. Continuation needs "
+            f"the Metal profile, which only runs on Apple Silicon -- on this "
+            f"machine each step has to stand alone. Remove carry_from from "
+            f"{', '.join(repr(c) for c in carried)}, or render this song on the Mac.")
+
+    config = dict(song.generation_config)
+    rng = config.get("rng_device")
+    if rng not in (None, "auto"):
+        print(f"note: rng_device={rng!r} is not available under the {profile.name!r} "
+              f"profile; using 'auto'. This take will not match the Mac, which it "
+              f"was not going to anyway.")
+        config["rng_device"] = "auto"
+    return config
 
 
 def native_result(pipe, song: Song, step: Step, plan, semantic, latents, audio, timing):
@@ -104,12 +167,8 @@ def native_result(pipe, song: Song, step: Step, plan, semantic, latents, audio, 
                                    {**song.semantic_sampling, "max_tokens": step.new_tokens})
     adapters = [a.identity() for a in lora.from_manifest(song.lora)]
     config["audiogen"] = {"step": step.id, "adapters": adapters or None,
-                          "carried": carried_note(step), "shims": shims.active() or None,
-                          "numerics": getattr(pipe, "audiogen_numerics", None),
+                          "carried": carried_note(step),
                           "audio_writer": "yue2.pipeline.SongResult", "pcm_bits": 24}
-    if getattr(pipe, "audiogen_numerics", None):
-        from .parity import runtime_identity
-        config["audiogen"]["numerics_identity"] = runtime_identity(pipe.profile)
     return SongResult(audio=np.asarray(audio), sample_rate=SAMPLE_RATE, semantic=semantic,
                       latents=np.asarray(latents), config=config, weights=pipe.weights,
                       timing=timing,
@@ -130,14 +189,7 @@ def request_id(song: Song, step: Step) -> str:
     reads request.json's id and falls back to the directory name), and two arms
     of an A/B that print the same title are not a comparison anyone can read.
 
-    A label replaces the derived name outright. When a run is a numbered step in
-    an experiment, the step number is what the take should be called on the page
-    -- deriving a title from the manifest just makes the reader translate. The
-    shims stay recorded in config["audiogen"]["shims"] either way, so naming a
-    take after the step loses nothing.
-
-    protocol.py:107 requires [A-Za-z0-9][A-Za-z0-9_.-]{0,179}, so a space in a
-    label becomes an underscore. "Step 1a" is stored and displayed as "Step_1a".
+    A supplied label replaces the derived name and is made filename-safe.
     """
     if song.label:
         safe = re.sub(r"[^A-Za-z0-9_.-]", "_", song.label).lstrip("._-")[:180]
@@ -145,24 +197,19 @@ def request_id(song: Song, step: Step) -> str:
             raise SystemExit(f"--label {song.label!r} has no filename-safe characters")
         return safe
     parts = [f"{a.path.stem}-x{a.strength:g}" for a in lora.from_manifest(song.lora)]
-    parts += [f"shim-{s}" for s in shims.active()]
     name = ".".join([f"{song.id}.{step.id}", *parts])
     return re.sub(r"[^A-Za-z0-9_.-]", "-", name)[:180]
 
 
 def request_for(song: Song, step: Step):
     from yue2.protocol import SongRequest
-    # FL-YuE2 runtime.make_plan strips supplied ABC before encoding it. A final
-    # newline changes a token even when the resulting prefix length is unchanged.
     def text_input(key, fallback):
         filename = getattr(step, key, None)
         return (song.root / filename).read_text() if filename is not None else fallback
 
     score = text_input("score_file", song.abc)
     abc = score.strip() or None if score is not None else None
-    # Unlike ABC, the reference Plan node preserves style/lyrics verbatim.
-    # Explicit per-step files must retain even a trailing newline. Song-level
-    # defaults keep the wrapper's existing normalized-file convention.
+    # Explicit style and lyric files retain their whitespace.
     style = text_input("style_file", song.style)
     lyrics = text_input("lyrics_file", song.lyrics)
     return SongRequest(style=style, lyrics=lyrics, id=request_id(song, step),
@@ -282,11 +329,7 @@ def provenance(song: Song, takes: list[Take], models: Path) -> dict:
                       else "mps" if torch.backends.mps.is_available() else "cpu",
             "models": str(models),
         },
-        # The command line is part of the environment. ComfyUI taught us this the
-        # expensive way: its launch flags changed the audio from the first token,
-        # appeared in no freeze file, no lockfile and no embedded workflow, and
-        # survived only in a shell transcript. Anything that decides what gets
-        # rendered and is not already above belongs here.
+        # Record invocation details alongside the effective render configuration.
         "invocation": {
             "argv": list(sys.argv),
             "executable": sys.executable,
@@ -294,7 +337,6 @@ def provenance(song: Song, takes: list[Take], models: Path) -> dict:
             "env": recorded_env(),
         },
         "pipeline": song.pipeline or None,
-        "shims": shims.active() or None,
         "lora": [adapter.identity() for adapter in lora.from_manifest(song.lora)] or None,
         "request": {
             "seed": song.seed, "cot": song.cot, "cfg_scale": song.cfg_scale,
