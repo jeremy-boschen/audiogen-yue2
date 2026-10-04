@@ -68,7 +68,7 @@ def build_pipeline(models: Path, song: Song, *, progress: bool = True):
         is_mps = device == "mps" or (device == "auto" and not torch.cuda.is_available()
                                       and torch.backends.mps.is_available())
         options["profile"] = "comfyui-yue2-mps-v1" if is_mps else "official"
-    if "backend" not in options and not flash_attention_built(torch):
+    if options.get("backend", "torch") == "torch" and not flash_attention_built(torch):
         # The CUDA-graph decode path calls aten::_flash_attention_forward
         # directly, and PyTorch's own Windows wheels are built without
         # FlashAttention -- so it does not fail to be fast, it raises
@@ -80,6 +80,8 @@ def build_pipeline(models: Path, song: Song, *, progress: bool = True):
         # Windows should keep the graphs. And is_flash_attention_available is
         # the right probe -- flash_sdp_enabled() returns True here, because it
         # reports which SDP backend is preferred, not what was compiled in.
+        # An explicit "torch" (the studio's default) falls back the same way:
+        # without flash it can only fail, never run with graphs.
         options["backend"] = "torch-eager"
     config = GenerationConfig(**fit_generation_config(song, options["profile"]))
     pipe = YuE2Pipeline(Path(models) / "YuE2-3B", Path(models) / "YuE2-Vae",
