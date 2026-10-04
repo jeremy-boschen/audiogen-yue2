@@ -56,3 +56,10 @@ NEXT.md
 node_modules/
 test-results/
 playwright-report/
+
+# Rendered/generated media stays on disk, never in git
+*.aac
+*.mp4
+*.webm
+*.mov
+*.mkv
