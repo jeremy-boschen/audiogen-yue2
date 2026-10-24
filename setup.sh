@@ -150,7 +150,7 @@ backend = ("cuda" if torch.cuda.is_available()
 detail = torch.cuda.get_device_name(0) if backend == "cuda" else backend
 print(f"    torch   {torch.__version__}   compute={backend} ({detail})")
 if backend == "cuda":
-    print("    profile official: no continuation, and seeds do not match the Mac")
+    print("    profile official-continuation: continues takes with the official numbers; seeds do not match the Mac")
 elif backend == "cpu":
     print("    warning: no GPU here. Renders will work and will be very slow.")
 print(f"    yue2    {__import__('importlib.metadata', fromlist=['x']).version('yue2-infer')}  from {yue2.__file__}")
@@ -158,10 +158,11 @@ config = GenerationConfig()
 assert hasattr(yue2.pipeline.YuE2Pipeline, "_stage_boundary"), "fork commits missing: no profile stage boundary"
 assert "carry" in yue2.pipeline.YuE2Pipeline.generate_semantic.__code__.co_varnames, "fork commits missing: no carry="
 assert config.rng_device == "auto", "fork commits missing: no rng_device"
-from yue2.profiles import OfficialProfile, ComfyUIYuE2MPSProfile
+from yue2.profiles import OfficialProfile, ComfyUIYuE2MPSProfile, resolve_profile
 assert "profile" in yue2.pipeline.YuE2Pipeline.__init__.__code__.co_varnames
 assert not OfficialProfile().supports_continuation
 assert ComfyUIYuE2MPSProfile().supports_continuation
+assert resolve_profile("official-continuation").supports_continuation, "fork commits missing: no official-continuation"
 assert OfficialProfile().identity()["upstream_revision"] == "bd90e4ccae671d869b3ecaca6d7e893927d29442"
 print("    engine support present: upstream official profile, opt-in compatibility policies")
 PY

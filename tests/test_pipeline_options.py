@@ -67,3 +67,34 @@ class TestFlashFallback:
 
     def test_should_keep_torch_when_flash_is_built(self, tmp_path, monkeypatch):
         assert self.build(tmp_path, monkeypatch, flash_built=True, backend="torch") == "torch"
+
+
+class TestContinuationProfiles:
+    """A carry chain is refused before anything renders under a profile that cannot continue,
+    and allowed under 'official-continuation' on any machine; rng_device is coerced either way."""
+
+    def song(self, tmp_path, rng="cpu"):
+        import json
+        from audiogen import song as song_module
+        (tmp_path / "style.txt").write_text("rock")
+        (tmp_path / "lyrics.txt").write_text("[verse]\nwords")
+        (tmp_path / "song.json").write_text(json.dumps(
+            {"id": "s", "seed": 1, "generation_config": {"rng_device": rng},
+             "steps": [{"id": "a", "seconds": 10.0},
+                       {"id": "b", "seconds": 20.0, "carry_from": "a", "carry_seconds": 5.0}]}))
+        return song_module.load(tmp_path)
+
+    def test_official_refuses_and_names_the_profile_that_can(self, tmp_path):
+        from audiogen import render
+        with pytest.raises(ValueError, match="'official-continuation'"):
+            render.fit_generation_config(self.song(tmp_path), "official")
+
+    def test_official_continuation_continues_with_auto_rng(self, tmp_path, capsys):
+        from audiogen import render
+        config = render.fit_generation_config(self.song(tmp_path), "official-continuation")
+        assert config["rng_device"] == "auto"
+        assert "not available" in capsys.readouterr().out
+
+    def test_the_mps_profile_keeps_its_cpu_rng(self, tmp_path):
+        from audiogen import render
+        assert render.fit_generation_config(self.song(tmp_path), "comfyui-yue2-mps-v1")["rng_device"] == "cpu"

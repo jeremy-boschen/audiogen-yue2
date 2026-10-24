@@ -112,43 +112,42 @@ def fit_generation_config(song: Song, profile_name: str) -> dict:
 
     Two different things get confused here, so they are separated.
 
-    A carry chain is a real capability. Only 'comfyui-yue2-mps-v1' supports it
-    and that profile hard-requires Apple Silicon, so on a CUDA box the chain is
-    impossible, permanently, and the honest answer is no. The engine does refuse
-    it too -- but inside validate_continuation, which is reached on the SECOND
-    step, so the song renders its first step, spends the GPU minutes, and only
-    then says no. And it says the profile does not support continuation, which
-    is true and unhelpful: the reader did not pick the profile, the machine did.
+    A carry chain is a real capability of the profile. 'comfyui-yue2-mps-v1'
+    (Apple Silicon only) and 'official-continuation' (any device, official
+    numerics) support it; 'official' does not. The engine refuses it too -- but
+    inside validate_continuation, which is reached on the SECOND step, so the
+    song renders its first step, spends the GPU minutes, and only then says no.
+    So it is refused here, before anything renders, with the profile to pick.
 
     `rng_device` is not a capability. It decides which device draws the sampling
-    noise, and 'official' insists on 'auto'. Every song here was written on the
-    Mac with 'cpu', and refusing them all would be pedantry: the seeds do not
-    reproduce across the two machines anyway -- different profile, different
-    kernels, different hardware. So it is coerced and said out loud, rather than
-    thrown back at someone who cannot do anything about it.
+    noise, and the official numerics insist on 'auto'. Every song here was
+    written on the Mac with 'cpu', and refusing them all would be pedantry: the
+    seeds do not reproduce across the two machines anyway -- different profile,
+    different kernels, different hardware. So it is coerced and said out loud,
+    rather than thrown back at someone who cannot do anything about it.
     """
     from yue2.profiles import resolve_profile
 
     profile = resolve_profile(profile_name)
-    if profile.supports_continuation:
-        return dict(song.generation_config)
-
     carried = [step.id for step in song.steps if step.carry_from is not None]
-    if carried:
+    if carried and not profile.supports_continuation:
         raise ValueError(
             f"this song grows step {carried[0]!r} out of an earlier one, and the "
-            f"{profile.name!r} profile cannot continue a take. Continuation needs "
-            f"the Metal profile, which only runs on Apple Silicon -- on this "
-            f"machine each step has to stand alone. Remove carry_from from "
-            f"{', '.join(repr(c) for c in carried)}, or render this song on the Mac.")
+            f"{profile.name!r} profile cannot continue a take. Pick a profile that "
+            f"can: 'official-continuation' (the official numbers, any machine) or "
+            f"'comfyui-yue2-mps-v1' (Apple Silicon). Or remove carry_from from "
+            f"{', '.join(repr(c) for c in carried)} so each step stands alone.")
 
     config = dict(song.generation_config)
     rng = config.get("rng_device")
     if rng not in (None, "auto"):
-        print(f"note: rng_device={rng!r} is not available under the {profile.name!r} "
-              f"profile; using 'auto'. This take will not match the Mac, which it "
-              f"was not going to anyway.")
-        config["rng_device"] = "auto"
+        try:
+            profile.sampling_rng_device(rng)
+        except ValueError:
+            print(f"note: rng_device={rng!r} is not available under the {profile.name!r} "
+                  f"profile; using 'auto'. This take will not match the Mac, which it "
+                  f"was not going to anyway.")
+            config["rng_device"] = "auto"
     return config
 
 
